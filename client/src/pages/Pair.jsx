@@ -28,6 +28,12 @@ function Pair() {
     e.preventDefault();
     setError('');
 
+    const cleanCode = partnerCode.trim().toUpperCase();
+    if (!cleanCode) {
+      setError('Please enter a partner code');
+      return;
+    }
+
     try {
       const response = await fetch('http://localhost:5000/api/pair/connect', {
         method: 'POST',
@@ -35,7 +41,7 @@ function Pair() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ pairCode: partnerCode })
+        body: JSON.stringify({ pairCode: cleanCode })
       });
 
       const data = await response.json();
@@ -60,11 +66,11 @@ function Pair() {
 
   return (
     <div className="page-center">
-      <h2>Connect with a Partner</h2>
+      <h2 style={{ marginBottom: '12px' }}>Connect with a Partner</h2>
       
       <div className="card">
-        <p className="subtext" style={{ marginBottom: '8px' }}>Your Pair Code</p>
-        <div style={{ fontSize: '2rem', fontWeight: '700', margin: '16px 0', letterSpacing: '4px', color: '#111111' }}>
+        <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '8px' }}>Your Pair Code</p>
+        <div style={{ fontSize: '2.5rem', fontWeight: '700', margin: '16px 0', letterSpacing: '4px', color: 'var(--text-primary)' }}>
           {user.pairCode}
         </div>
         <button 
@@ -78,7 +84,7 @@ function Pair() {
 
       <div className="card">
         <form onSubmit={handleConnect}>
-          <h3>Enter Partner's Code</h3>
+          <h3 style={{ marginBottom: '16px' }}>Enter Partner's Code</h3>
           {error && <div className="error-box">Error: {error}</div>}
           <div className="form-group mt-2">
             <input

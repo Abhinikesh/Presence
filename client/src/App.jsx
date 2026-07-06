@@ -10,7 +10,12 @@ function ProtectedRoute({ children }) {
   const { token, loading } = useAuth();
 
   if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: '40px' }}>Loading...</div>;
+    return (
+      <div className="page-center">
+        <h1>Presence</h1>
+        <p className="tagline">Loading...</p>
+      </div>
+    );
   }
 
   if (!token) {
@@ -25,7 +30,12 @@ function PublicRoute({ children }) {
   const { token, loading } = useAuth();
 
   if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: '40px' }}>Loading...</div>;
+    return (
+      <div className="page-center">
+        <h1>Presence</h1>
+        <p className="tagline">Loading...</p>
+      </div>
+    );
   }
 
   if (token) {

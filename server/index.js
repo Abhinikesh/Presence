@@ -9,14 +9,30 @@ require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
+const path = require('path');
+const fs = require('fs');
+
+// Ensure upload directory exists on startup
+const uploadDir = path.join(__dirname, 'uploads/songs');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Middleware
-app.use(cors());
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:5175';
+app.use(cors({
+  origin: clientUrl,
+  credentials: true
+}));
 app.use(express.json());
+
+// Serve uploads static files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Import Routes
 const authRouter = require('./routes/auth');
 const pairRouter = require('./routes/pair');
+const songsRouter = require('./routes/songs');
 
 // Single test route
 app.get('/api/health', (req, res) => {
@@ -26,6 +42,7 @@ app.get('/api/health', (req, res) => {
 // Route Middlewares
 app.use('/api/auth', authRouter);
 app.use('/api/pair', pairRouter);
+app.use('/api/songs', songsRouter);
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -33,7 +50,7 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: '*', // Allow all origins for development template, can restrict later
+    origin: clientUrl,
     methods: ['GET', 'POST']
   }
 });
@@ -107,7 +124,6 @@ io.on('connection', async (socket) => {
     } else {
       onlineUsers.set(userId, { socketId: socket.id, status });
     }
-    console.log(`User ${userId} updated status to: ${status}`);
 
     try {
       const user = await User.findById(userId);
@@ -120,6 +136,93 @@ io.on('connection', async (socket) => {
       }
     } catch (err) {
       console.error(`Error broadcasting status update for user ${userId}:`, err);
+    }
+  });
+
+  // Music sync events
+  socket.on('play_song', async (data) => {
+    const { songId, currentTime } = data;
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('sync_play', { songId, currentTime });
+        }
+      }
+    } catch (err) {
+      console.error(`Error syncing play for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('pause_song', async (data) => {
+    const { currentTime } = data;
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('sync_pause', { currentTime });
+        }
+      }
+    } catch (err) {
+      console.error(`Error syncing pause for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('seek_song', async (data) => {
+    const { currentTime } = data;
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('sync_seek', { currentTime });
+        }
+      }
+    } catch (err) {
+      console.error(`Error syncing seek for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('change_song', async (data) => {
+    const { songId } = data;
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('sync_change_song', { songId });
+        }
+      }
+    } catch (err) {
+      console.error(`Error syncing change_song for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('send_ping', async (data) => {
+    const { type } = data;
+    const validTypes = ['heart', 'wave', 'thinking'];
+    if (!validTypes.includes(type)) return;
+
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('receive_ping', {
+            type,
+            fromName: user.name
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`Error sending ping from user ${userId}:`, err);
     }
   });
 
