@@ -3,6 +3,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const User = require('./models/User');
 require('dotenv').config();
 
 const app = express();
@@ -36,12 +38,114 @@ const io = new Server(server, {
   }
 });
 
-// Socket.IO connection event
-io.on('connection', (socket) => {
-  console.log('user connected');
+// In-memory mapping of online users: userId -> { socketId, status }
+const onlineUsers = new Map();
 
-  socket.on('disconnect', () => {
-    console.log('user disconnected');
+// Socket.IO authentication middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next(new Error('Authentication error: Token missing'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Attach userId (using id field from payload) to socket object
+    socket.userId = decoded.id || decoded.userId;
+    next();
+  } catch (err) {
+    return next(new Error('Authentication error: Invalid token'));
+  }
+});
+
+// Socket.IO connection event
+io.on('connection', async (socket) => {
+  const userId = socket.userId;
+  // Default status is "Free" on connection
+  onlineUsers.set(userId, { socketId: socket.id, status: 'Free' });
+  console.log(`User connected: ${userId} (Socket: ${socket.id})`);
+
+  try {
+    // Look up the user's pairId (partner's ID)
+    const user = await User.findById(userId);
+    if (user && user.pairId) {
+      const partnerId = user.pairId.toString();
+      const partnerInfo = onlineUsers.get(partnerId);
+      const partnerOnline = !!partnerInfo;
+
+      // 1. Emit partner's status immediately to the current user
+      if (partnerOnline) {
+        socket.emit('partner_status', { online: true, status: partnerInfo.status });
+      } else {
+        socket.emit('partner_status', { online: false });
+      }
+
+      // 2. If partner is online, notify them that this user connected with status "Free"
+      if (partnerOnline) {
+        io.to(partnerInfo.socketId).emit('partner_online', { status: 'Free' });
+      }
+    } else {
+      // User is not paired yet
+      socket.emit('partner_status', { online: false });
+    }
+  } catch (err) {
+    console.error(`Error handling socket connection for user ${userId}:`, err);
+  }
+
+  // Handle status updates
+  socket.on('update_status', async (data) => {
+    const { status } = data;
+    const validStatuses = ['Studying', 'Sleeping', 'Free', 'Listening'];
+    if (!validStatuses.includes(status)) {
+      return;
+    }
+
+    const userInfo = onlineUsers.get(userId);
+    if (userInfo) {
+      userInfo.status = status;
+      onlineUsers.set(userId, userInfo);
+    } else {
+      onlineUsers.set(userId, { socketId: socket.id, status });
+    }
+    console.log(`User ${userId} updated status to: ${status}`);
+
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('partner_status_update', { status });
+        }
+      }
+    } catch (err) {
+      console.error(`Error broadcasting status update for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('disconnect', async () => {
+    console.log(`User disconnected: ${userId} (Socket: ${socket.id})`);
+    
+    // Only remove from onlineUsers if this socket is the active one mapped
+    const userInfo = onlineUsers.get(userId);
+    if (userInfo && userInfo.socketId === socket.id) {
+      onlineUsers.delete(userId);
+    }
+
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        
+        // Notify partner that current user is offline
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('partner_offline');
+        }
+      }
+    } catch (err) {
+      console.error(`Error handling socket disconnect for user ${userId}:`, err);
+    }
   });
 });
 

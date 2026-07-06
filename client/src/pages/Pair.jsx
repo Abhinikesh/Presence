@@ -59,43 +59,46 @@ function Pair() {
   }
 
   return (
-    <div style={{ maxWidth: '400px', margin: '40px auto' }}>
+    <div className="page-center">
       <h2>Connect with a Partner</h2>
       
-      <div style={{ padding: '20px', border: '1px solid black', marginBottom: '20px' }}>
-        <p>Your Pair Code:</p>
-        <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '10px 0', letterSpacing: '2px' }}>
+      <div className="card">
+        <p className="subtext" style={{ marginBottom: '8px' }}>Your Pair Code</p>
+        <div style={{ fontSize: '2rem', fontWeight: '700', margin: '16px 0', letterSpacing: '4px', color: '#111111' }}>
           {user.pairCode}
         </div>
         <button 
           onClick={handleCopy} 
-          style={{ padding: '5px 10px', background: 'white', border: '1px solid black', cursor: 'pointer' }}
+          className="btn"
+          style={{ width: 'auto', padding: '8px 16px', display: 'inline-flex' }}
         >
           {copied ? 'Copied' : 'Copy Code'}
         </button>
       </div>
 
-      <form onSubmit={handleConnect} style={{ padding: '20px', border: '1px solid black' }}>
-        <h3>Enter Partner's Code</h3>
-        {error && <p style={{ color: 'black', fontWeight: 'bold' }}>Error: {error}</p>}
-        <div style={{ marginBottom: '15px' }}>
-          <input
-            type="text"
-            placeholder="Partner's 6-character code"
-            value={partnerCode}
-            onChange={(e) => setPartnerCode(e.target.value)}
-            style={{ width: '100%', padding: '8px', border: '1px solid black', boxSizing: 'border-box' }}
-            maxLength={6}
-            required
-          />
-        </div>
-        <button 
-          type="submit" 
-          style={{ width: '100%', padding: '10px', background: 'white', border: '1px solid black', cursor: 'pointer' }}
-        >
-          Connect
-        </button>
-      </form>
+      <div className="card">
+        <form onSubmit={handleConnect}>
+          <h3>Enter Partner's Code</h3>
+          {error && <div className="error-box">Error: {error}</div>}
+          <div className="form-group mt-2">
+            <input
+              type="text"
+              placeholder="Partner's 6-character code"
+              value={partnerCode}
+              onChange={(e) => setPartnerCode(e.target.value)}
+              className="input-text"
+              maxLength={6}
+              required
+            />
+          </div>
+          <button 
+            type="submit" 
+            className="btn btn-primary mt-3"
+          >
+            Connect
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

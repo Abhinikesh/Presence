@@ -48,54 +48,24 @@ function Login() {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '80vh',
-      textAlign: 'center'
-    }}>
+    <div className="page-center">
       {/* App logo and tagline */}
-      <h1 style={{ fontSize: '3rem', fontWeight: 'bold', margin: '0 0 10px 0', letterSpacing: '-1px' }}>
-        Presence
-      </h1>
-      <p style={{ fontSize: '1rem', color: '#666666', margin: '0 0 30px 0' }}>
-        Stay connected, always
-      </p>
-
+      <h1>Presence</h1>
+      <p className="tagline">Stay connected, always</p>
+ 
       {/* Clean centered login card */}
-      <div style={{
-        width: '320px',
-        padding: '30px',
-        border: '1px solid #e0e0e0',
-        borderRadius: '8px',
-        backgroundColor: '#ffffff',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '600', margin: '0 0 10px 0' }}>
-          Welcome
-        </h2>
-        <p style={{ fontSize: '0.9rem', color: '#666666', margin: '0 0 24px 0' }}>
-          Sign in to continue
-        </p>
-
+      <div className="card">
+        <h2>Welcome</h2>
+        <p className="subtext">Sign in to continue</p>
+ 
         {error && (
-          <div style={{
-            color: '#000000',
-            fontWeight: 'bold',
-            fontSize: '0.85rem',
-            padding: '10px',
-            border: '1px solid #000000',
-            marginBottom: '20px',
-            textAlign: 'left'
-          }}>
+          <div className="error-box">
             Error: {error}
           </div>
         )}
-
+ 
         {/* Center the google button */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
             onError={handleGoogleError}
