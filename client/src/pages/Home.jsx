@@ -2,8 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
-
-const BACKEND_URL = 'http://localhost:5000';
+import { BACKEND_URL } from '../config';
 
 function Home() {
   const { user, token, logout, setUser } = useAuth();

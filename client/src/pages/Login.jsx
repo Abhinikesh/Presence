@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
-
-const BACKEND_URL = 'http://localhost:5000';
+import { BACKEND_URL } from '../config';
 
 function Login() {
   const [name, setName] = useState('');

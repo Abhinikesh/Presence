@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { BACKEND_URL } from '../config';
 
 function Pair() {
   const [partnerCode, setPartnerCode] = useState('');
@@ -35,7 +36,7 @@ function Pair() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/pair/connect', {
+      const response = await fetch(`${BACKEND_URL}/api/pair/connect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
