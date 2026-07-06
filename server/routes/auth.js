@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Helper to generate unique pairCode
 const generateUniquePairCode = async () => {
@@ -20,81 +22,88 @@ const generateUniquePairCode = async () => {
   return code;
 };
 
-// Signup Route
-router.post('/signup', async (req, res) => {
+// Google Auth Route
+router.post('/google', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { token } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Name, email, and password are required' });
+    if (!token) {
+      return res.status(400).json({ error: 'Google ID token is required' });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ error: 'Email already registered' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 8);
-
-    // Generate unique pairCode
-    const pairCode = await generateUniquePairCode();
-
-    // Create and save user
-    const user = new User({
-      name,
-      email,
-      password: hashedPassword,
-      pairCode
+    // Verify the Google ID token using google-auth-library
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID
     });
 
-    await user.save();
-
-    // Generate token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-    res.status(201).json({ token, user: { id: user._id, name: user.name, email: user.email, pairCode: user.pairCode } });
-  } catch (error) {
-    res.status(500).json({ error: 'Server error during signup: ' + error.message });
-  }
-});
-
-// Login Route
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    const payload = ticket.getPayload();
+    if (!payload) {
+      return res.status(400).json({ error: 'Invalid token payload' });
     }
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    const { sub: googleId, email, name, picture: profilePicture } = payload;
+
+    // Check if user with this googleId already exists
+    let user = await User.findOne({ googleId });
+
     if (!user) {
-      return res.status(400).json({ error: 'Invalid email or password' });
+      // Create new user if not found
+      const pairCode = await generateUniquePairCode();
+      user = new User({
+        googleId,
+        name,
+        email,
+        profilePicture,
+        pairCode
+      });
+      await user.save();
+    } else {
+      // Update profile details if they changed
+      let updated = false;
+      if (user.name !== name) {
+        user.name = name;
+        updated = true;
+      }
+      if (user.profilePicture !== profilePicture) {
+        user.profilePicture = profilePicture;
+        updated = true;
+      }
+      if (user.email !== email) {
+        user.email = email;
+        updated = true;
+      }
+      if (updated) {
+        await user.save();
+      }
     }
 
-    // Verify password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid email or password' });
-    }
+    // Generate our own JWT containing userId and id (for middleware)
+    const jwtToken = jwt.sign(
+      { id: user._id, userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
-    // Generate token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email, pairCode: user.pairCode } });
+    res.json({
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        profilePicture: user.profilePicture,
+        pairCode: user.pairCode,
+        pairId: user.pairId
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Server error during login: ' + error.message });
+    res.status(500).json({ error: 'Authentication failed: ' + error.message });
   }
 });
 
 // Get Current Logged-in User
 router.get('/me', auth, async (req, res) => {
-  const user = req.user.toObject();
-  delete user.password;
-  res.json(user);
+  res.json(req.user);
 });
 
 module.exports = router;

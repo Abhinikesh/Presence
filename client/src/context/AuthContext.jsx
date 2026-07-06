@@ -3,7 +3,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
+    try {
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
@@ -24,10 +31,13 @@ export const AuthProvider = ({ children }) => {
         if (response.ok) {
           const data = await response.json();
           setUser(data);
+          localStorage.setItem('user', JSON.stringify(data));
         } else {
           // Clean up invalid or expired token
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           setToken(null);
+          setUser(null);
         }
       } catch (error) {
         console.error('Error fetching user profile:', error);
@@ -41,12 +51,14 @@ export const AuthProvider = ({ children }) => {
 
   const login = (newToken, userData) => {
     localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(userData));
     setToken(newToken);
     setUser(userData);
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setToken(null);
     setUser(null);
   };

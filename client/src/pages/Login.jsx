@@ -1,93 +1,108 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
+
+const BACKEND_URL = 'http://localhost:5000';
 
 function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleGoogleSuccess = async (credentialResponse) => {
     setError('');
+    const idToken = credentialResponse.credential;
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch(`${BACKEND_URL}/api/auth/google`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ token: idToken })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // Log in user locally in context
+        // Save JWT and user info in localStorage + context
         login(data.token, data.user);
 
-        // Fetch pairing status to determine redirect
-        const statusResponse = await fetch('http://localhost:5000/api/pair/status', {
-          headers: {
-            'Authorization': `Bearer ${data.token}`
-          }
-        });
-
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          if (statusData.paired) {
-            navigate('/home');
-          } else {
-            navigate('/pair');
-          }
+        // Redirect: if user.pairId exists go to /home, otherwise go to /pair
+        if (data.user.pairId) {
+          navigate('/home');
         } else {
-          // Fallback to /pair if pairing status check fails
           navigate('/pair');
         }
       } else {
-        setError(data.error || 'Login failed');
+        setError(data.error || 'Google login failed on backend.');
       }
     } catch (err) {
       setError('Network error, please try again.');
     }
   };
 
+  const handleGoogleError = () => {
+    setError('Google Sign-In failed. Please try again.');
+  };
+
   return (
-    <div style={{ maxWidth: '300px', margin: '40px auto' }}>
-      <h2>Login</h2>
-      {error && <p style={{ color: 'black', fontWeight: 'bold' }}>Error: {error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '5px' }}>Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ width: '100%', padding: '8px', border: '1px solid black', boxSizing: 'border-box' }}
-            required
-          />
-        </div>
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="password" style={{ display: 'block', marginBottom: '5px' }}>Password</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ width: '100%', padding: '8px', border: '1px solid black', boxSizing: 'border-box' }}
-            required
-          />
-        </div>
-        <button type="submit" style={{ width: '100%', padding: '10px', background: 'white', border: '1px solid black', cursor: 'pointer' }}>
-          Log In
-        </button>
-      </form>
-      <p style={{ marginTop: '15px' }}>
-        Don't have an account? <Link to="/signup" style={{ color: 'black' }}>Signup</Link>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '80vh',
+      textAlign: 'center'
+    }}>
+      {/* App logo and tagline */}
+      <h1 style={{ fontSize: '3rem', fontWeight: 'bold', margin: '0 0 10px 0', letterSpacing: '-1px' }}>
+        Presence
+      </h1>
+      <p style={{ fontSize: '1rem', color: '#666666', margin: '0 0 30px 0' }}>
+        Stay connected, always
       </p>
+
+      {/* Clean centered login card */}
+      <div style={{
+        width: '320px',
+        padding: '30px',
+        border: '1px solid #e0e0e0',
+        borderRadius: '8px',
+        backgroundColor: '#ffffff',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+      }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '600', margin: '0 0 10px 0' }}>
+          Welcome
+        </h2>
+        <p style={{ fontSize: '0.9rem', color: '#666666', margin: '0 0 24px 0' }}>
+          Sign in to continue
+        </p>
+
+        {error && (
+          <div style={{
+            color: '#000000',
+            fontWeight: 'bold',
+            fontSize: '0.85rem',
+            padding: '10px',
+            border: '1px solid #000000',
+            marginBottom: '20px',
+            textAlign: 'left'
+          }}>
+            Error: {error}
+          </div>
+        )}
+
+        {/* Center the google button */}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            useOneTap={false}
+          />
+        </div>
+      </div>
     </div>
   );
 }
