@@ -389,7 +389,8 @@ h3 {
   margin-bottom: var(--space-2);
 }
 
-.youtube-container iframe {
+.youtube-container iframe,
+.youtube-container video {
   position: absolute;
   top: 0;
   left: 0;
@@ -408,4 +409,10 @@ h3 {
   h1 {
     font-size: 2rem;
   }
+}
+
+.tictactoe-cell-active:hover {
+  background-color: #FDF1EE !important;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 8px rgba(232, 98, 63, 0.1);
 }

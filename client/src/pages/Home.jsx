@@ -39,6 +39,46 @@ function Home() {
   const [ytError, setYtError] = useState('');
   const [currentVideoId, setCurrentVideoId] = useState('');
 
+  // Geolocation Distance Sync states
+  const [shareLocation, setShareLocation] = useState(false);
+  const [distanceApart, setDistanceApart] = useState(null);
+  const watchIdRef = useRef(null);
+
+  // Leave-behind note states
+  const [noteMessage, setNoteMessage] = useState('');
+  const [noteTriggerStatus, setNoteTriggerStatus] = useState('Free');
+  const [activeNote, setActiveNote] = useState(null);
+  const [noteFeedback, setNoteFeedback] = useState('');
+
+  // Study Room States
+  const [durationMinutes, setDurationMinutes] = useState(25);
+  const [remainingSeconds, setRemainingSeconds] = useState(25 * 60);
+  const [timerActive, setTimerActive] = useState(false);
+  const [focusCompletionMsg, setFocusCompletionMsg] = useState('');
+  const [tasks, setTasks] = useState([]);
+  const [newTaskText, setNewTaskText] = useState('');
+  const timerIntervalRef = useRef(null);
+  const durationMinutesRef = useRef(25);
+  
+  // Tic-Tac-Toe Game State
+  const [gameState, setGameState] = useState(null);
+
+  // Whiteboard States & Refs
+  const [brushColor, setBrushColor] = useState('#1A1A1A');
+  const [brushWidth, setBrushWidth] = useState(4);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const canvasRef = useRef(null);
+  const prevCoordsRef = useRef({ x: 0, y: 0 });
+
+  // Icebreaker states
+  const [icebreakerPrompt, setIcebreakerPrompt] = useState(null);
+  const [icebreakerChoice, setIcebreakerChoice] = useState(null);
+  const [icebreakerStatus, setIcebreakerStatus] = useState('idle');
+  const [icebreakerRevealData, setIcebreakerRevealData] = useState(null);
+  useEffect(() => {
+    durationMinutesRef.current = durationMinutes;
+  }, [durationMinutes]);
+
   // Watch Together refs
   const ytPlayerRef = useRef(null);
   const isIncomingSyncRef = useRef(false);
@@ -245,12 +285,201 @@ function Home() {
       }
     });
 
+    socket.on('distance_update', (data) => {
+      if (data && typeof data.distanceKm === 'number') {
+        setDistanceApart(`${data.distanceKm} km apart`);
+      } else {
+        setDistanceApart(null);
+      }
+    });
+
+    socket.on('note_delivered', (data) => {
+      if (data && data.message) {
+        setActiveNote(data);
+      }
+    });
+
+    socket.on('timer_sync_start', (data) => {
+      const { durationMinutes: dMins, startedAt } = data;
+      const elapsedMs = Date.now() - startedAt;
+      const elapsedSecs = Math.floor(elapsedMs / 1000);
+      const totalSecs = dMins * 60;
+      const remaining = Math.max(0, totalSecs - elapsedSecs);
+
+      setDurationMinutes(dMins);
+      setRemainingSeconds(remaining);
+      setFocusCompletionMsg('');
+
+      if (remaining > 0) {
+        setTimerActive(true);
+        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = setInterval(() => {
+          setRemainingSeconds((prev) => {
+            if (prev <= 1) {
+              clearInterval(timerIntervalRef.current);
+              setTimerActive(false);
+              setFocusCompletionMsg(`Session complete! You both focused for ${dMins} minutes`);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        setTimerActive(false);
+        setFocusCompletionMsg(`Session complete! You both focused for ${dMins} minutes`);
+      }
+    });
+
+    socket.on('timer_sync_pause', (data) => {
+      setTimerActive(false);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      setRemainingSeconds(data.remainingSeconds);
+    });
+
+    socket.on('timer_sync_reset', () => {
+      setTimerActive(false);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      setRemainingSeconds(durationMinutesRef.current * 60);
+      setFocusCompletionMsg('');
+    });
+
+    socket.on('task_created', (task) => {
+      setTasks((prev) => {
+        if (prev.some((t) => t._id === task._id)) return prev;
+        return [...prev, task];
+      });
+    });
+
+    socket.on('task_updated', (task) => {
+      setTasks((prev) => prev.map((t) => t._id === task._id ? task : t));
+    });
+
+    socket.on('task_deleted', (data) => {
+      setTasks((prev) => prev.filter((t) => t._id !== data.id));
+    });
+
+    socket.on('game_state_update', (game) => {
+      setGameState(game);
+    });
+
+    socket.on('canvas_sync_draw', (data) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.beginPath();
+      ctx.strokeStyle = data.color;
+      ctx.lineWidth = data.lineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(data.prevX * canvas.width, data.prevY * canvas.height);
+      ctx.lineTo(data.x * canvas.width, data.y * canvas.height);
+      ctx.stroke();
+      ctx.closePath();
+    });
+
+    socket.on('canvas_sync_clear', () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    });
+
+    socket.on('icebreaker_new_prompt', (data) => {
+      setIcebreakerPrompt(data);
+      setIcebreakerChoice(null);
+      setIcebreakerStatus('playing');
+      setIcebreakerRevealData(null);
+    });
+
+    socket.on('icebreaker_waiting', () => {
+      setIcebreakerStatus('waiting');
+    });
+
+    socket.on('icebreaker_reveal', (data) => {
+      setIcebreakerRevealData(data);
+      setIcebreakerStatus('reveal');
+    });
+
     // Clean up socket connection on component unmount
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
   }, [token]);
+
+  const fetchPendingNote = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/notes/pending`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.message) {
+          setActiveNote(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching pending note:', err);
+    }
+  };
+
+  const fetchTasks = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tasks`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(data);
+      }
+    } catch (err) {
+      console.error('Error fetching tasks:', err);
+    }
+  };
+
+  const handleLeaveNote = async (e) => {
+    e.preventDefault();
+    setNoteFeedback('');
+    
+    if (!noteMessage.trim()) {
+      setError('Please enter a note message');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: noteMessage.trim(),
+          triggerStatus: noteTriggerStatus
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setNoteFeedback(`Note will show when they're ${noteTriggerStatus}`);
+        setNoteMessage('');
+        setTimeout(() => {
+          setNoteFeedback('');
+        }, 4000);
+      } else {
+        setError(data.error || 'Failed to leave note');
+      }
+    } catch (err) {
+      setError('Network error leaving note.');
+    }
+  };
 
   useEffect(() => {
     const fetchPairStatus = async () => {
@@ -267,6 +496,8 @@ function Home() {
           const data = await response.json();
           if (data.paired) {
             setPartnerName(data.partner.name);
+            fetchPendingNote();
+            fetchTasks();
           } else {
             // If not paired, redirect to pair page
             navigate('/pair');
@@ -627,6 +858,323 @@ function Home() {
     };
   }, []);
 
+  // Geolocation Distance Sync handlers and effects
+  const handleToggleLocation = () => {
+    if (shareLocation) {
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setShareLocation(false);
+      setDistanceApart(null);
+      if (socketRef.current) {
+        socketRef.current.emit('update_location', null);
+      }
+    } else {
+      setShareLocation(true);
+      setDistanceApart(null);
+      
+      if (!navigator.geolocation) {
+        setError('Geolocation is not supported by your browser.');
+        setShareLocation(false);
+        return;
+      }
+
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          if (socketRef.current) {
+            socketRef.current.emit('update_location', { latitude, longitude });
+          }
+        },
+        (err) => {
+          console.error('Geolocation error:', err);
+          if (err.code === err.PERMISSION_DENIED) {
+            setError('Location access denied. Please enable location permissions in your browser settings.');
+          } else {
+            setError('Unable to retrieve location.');
+          }
+          setShareLocation(false);
+          if (socketRef.current) {
+            socketRef.current.emit('update_location', null);
+          }
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 300000
+        }
+      );
+      watchIdRef.current = watchId;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
+  // Study Room Timer Handlers
+  const handleTimerStart = (duration = durationMinutes) => {
+    const totalSeconds = duration * 60;
+    setRemainingSeconds(totalSeconds);
+    setTimerActive(true);
+    setFocusCompletionMsg('');
+
+    const startedAt = Date.now();
+
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerIntervalRef.current);
+          setTimerActive(false);
+          setFocusCompletionMsg(`Session complete! You both focused for ${duration} minutes`);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    if (socketRef.current) {
+      socketRef.current.emit('timer_start', { durationMinutes: duration, startedAt });
+    }
+  };
+
+  const handleTimerPause = () => {
+    setTimerActive(false);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (socketRef.current) {
+      socketRef.current.emit('timer_pause', { remainingSeconds });
+    }
+  };
+
+  const handleTimerReset = () => {
+    setTimerActive(false);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    setRemainingSeconds(durationMinutes * 60);
+    setFocusCompletionMsg('');
+    if (socketRef.current) {
+      socketRef.current.emit('timer_reset');
+    }
+  };
+
+  const handlePresetChange = (minutes) => {
+    setDurationMinutes(minutes);
+    setRemainingSeconds(minutes * 60);
+    setFocusCompletionMsg('');
+    if (timerActive) {
+      handleTimerStart(minutes);
+    }
+  };
+
+  // Shared Task List Handlers
+  const handleAddTask = async (e) => {
+    e.preventDefault();
+    if (!newTaskText.trim()) return;
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ text: newTaskText.trim() })
+      });
+
+      if (response.ok) {
+        const task = await response.json();
+        setTasks((prev) => [...prev, task]);
+        setNewTaskText('');
+      } else {
+        setError('Failed to create task');
+      }
+    } catch (err) {
+      setError('Network error creating task.');
+    }
+  };
+
+  const handleToggleTask = async (taskId) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const updatedTask = await response.json();
+        setTasks((prev) => prev.map((t) => t._id === taskId ? updatedTask : t));
+      } else {
+        setError('Failed to toggle task');
+      }
+    } catch (err) {
+      setError('Network error updating task.');
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setTasks((prev) => prev.filter((t) => t._id !== taskId));
+      } else {
+        setError('Failed to delete task');
+      }
+    } catch (err) {
+      setError('Network error deleting task.');
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
+
+  // Tic-Tac-Toe Game Handlers
+  const handleStartGame = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('game_start_tictactoe');
+    }
+  };
+
+  const handleMakeMove = (cellIndex) => {
+    if (!gameState || gameState.status !== 'playing') return;
+    if (gameState.turnUserId !== user._id) return;
+    if (gameState.board[cellIndex] !== null) return;
+
+    if (socketRef.current) {
+      socketRef.current.emit('game_make_move', { cellIndex });
+    }
+  };
+
+  const handleResetGame = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('game_reset_tictactoe');
+    }
+  };
+
+  // Whiteboard Canvas handlers
+  const drawLine = (x1, y1, x2, y2, color, lineWidth, emit = true) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.moveTo(x1 * canvas.width, y1 * canvas.height);
+    ctx.lineTo(x2 * canvas.width, y2 * canvas.height);
+    ctx.stroke();
+    ctx.closePath();
+
+    if (emit && socketRef.current) {
+      socketRef.current.emit('canvas_draw', {
+        x: x2,
+        y: y2,
+        prevX: x1,
+        prevY: y1,
+        color,
+        lineWidth
+      });
+    }
+  };
+
+  const handleStartDrawing = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (e.touches) {
+      e.preventDefault();
+    }
+    
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    if (clientX === undefined || clientY === undefined) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+
+    setIsDrawing(true);
+    prevCoordsRef.current = { x, y };
+  };
+
+  const handleDrawing = (e) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (e.touches) {
+      e.preventDefault();
+    }
+
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    if (clientX === undefined || clientY === undefined) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+
+    const dx = x - prevCoordsRef.current.x;
+    const dy = y - prevCoordsRef.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.001) return;
+
+    drawLine(prevCoordsRef.current.x, prevCoordsRef.current.y, x, y, brushColor, brushWidth, true);
+    prevCoordsRef.current = { x, y };
+  };
+
+  const handleStopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const handleClearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    if (socketRef.current) {
+      socketRef.current.emit('canvas_clear');
+    }
+  };
+
+  // Icebreaker click handlers
+  const handleStartIcebreaker = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('icebreaker_start');
+    }
+  };
+
+  const handleIcebreakerAnswer = (choice) => {
+    setIcebreakerChoice(choice);
+    if (socketRef.current) {
+      socketRef.current.emit('icebreaker_answer', { choice });
+    }
+  };
+
+  const handleNextIcebreaker = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('icebreaker_next');
+    }
+  };
+
   const formatTime = (time) => {
     if (isNaN(time)) return '0:00';
     const mins = Math.floor(time / 60);
@@ -640,6 +1188,74 @@ function Home() {
 
   return (
     <div className="page-top">
+      {/* Leave-behind Note Modal Overlay */}
+      {activeNote && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1300,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 'var(--radius)',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            width: '100%',
+            maxWidth: '400px',
+            padding: '24px',
+            textAlign: 'center',
+            animation: 'scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+          }}>
+            <div style={{ 
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px 12px',
+              borderRadius: '12px',
+              backgroundColor: '#FAF0E6',
+              color: 'var(--accent-color)',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: '16px'
+            }}>
+              Received Note
+            </div>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '8px', color: 'var(--text-primary)' }}>
+              Note from {activeNote.fromName}
+            </h3>
+            <p style={{ 
+              fontSize: '0.925rem', 
+              lineHeight: '1.6', 
+              color: 'var(--text-primary)', 
+              backgroundColor: '#FAF9F7', 
+              padding: '16px', 
+              borderRadius: 'var(--radius-sm)', 
+              border: '1px solid var(--border-color)',
+              marginBottom: '20px', 
+              fontStyle: 'italic',
+              wordBreak: 'break-word'
+            }}>
+              "{activeNote.message}"
+            </p>
+            <button
+              onClick={() => setActiveNote(null)}
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '10px' }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Reconnecting banner */}
       {!isConnected && (
         <div
@@ -713,11 +1329,18 @@ function Home() {
           <span style={{ fontSize: '1.125rem', fontWeight: '500', color: 'var(--text-primary)' }}>
             Connected with <strong style={{ color: 'var(--accent-color)', fontWeight: '700' }}>{partnerName || 'Loading partner...'}</strong>
           </span>
-          <div className="status-indicator">
-            <div className={`dot ${partnerOnline ? 'dot-online' : 'dot-offline'}`} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              {partnerOnline ? `Online — ${partnerStatus}` : 'Offline'}
-            </span>
+          <div className="status-indicator" style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className={`dot ${partnerOnline ? 'dot-online' : 'dot-offline'}`} />
+              <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                {partnerOnline ? `Online — ${partnerStatus}` : 'Offline'}
+              </span>
+            </div>
+            {partnerOnline && distanceApart && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', paddingLeft: '16px', fontStyle: 'italic' }}>
+                {distanceApart}
+              </span>
+            )}
           </div>
         </div>
 
@@ -765,6 +1388,51 @@ function Home() {
           </button>
         </div>
 
+        {/* Geolocation Distance Sync */}
+        <div style={{ 
+          marginTop: '24px', 
+          paddingTop: '20px', 
+          borderTop: '1px solid var(--border-color)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>Share Location</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Your exact location is never shown, only distance
+              </p>
+            </div>
+            <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px' }}>
+              <input 
+                type="checkbox" 
+                checked={shareLocation} 
+                onChange={handleToggleLocation} 
+                style={{ opacity: 0, width: 0, height: 0 }}
+              />
+              <span style={{
+                position: 'absolute',
+                cursor: 'pointer',
+                top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: shareLocation ? 'var(--accent-color)' : '#ccc',
+                transition: '0.4s',
+                borderRadius: '24px'
+              }}>
+                <span style={{
+                  position: 'absolute',
+                  content: '""',
+                  height: '18px', width: '18px',
+                  left: shareLocation ? '22px' : '4px',
+                  bottom: '3px',
+                  backgroundColor: 'white',
+                  transition: '0.4s',
+                  borderRadius: '50%'
+                }} />
+              </span>
+            </label>
+          </div>
+        </div>
 
         <div style={{ display: 'flex', gap: '16px', marginTop: '36px', justifyContent: 'center' }}>
           <button 
@@ -796,6 +1464,657 @@ function Home() {
             Logout
           </button>
         </div>
+      </div>
+
+      {/* Leave a Note Card */}
+      <div className="card card-left">
+        <h2>Leave a Note</h2>
+        
+        <form onSubmit={handleLeaveNote} style={{ marginTop: '16px' }}>
+          <div className="form-group">
+            <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>
+              Attach a note for your partner
+            </label>
+            <textarea
+              maxLength="300"
+              placeholder="Type your note here... (max 300 chars)"
+              value={noteMessage}
+              onChange={(e) => setNoteMessage(e.target.value)}
+              className="input-text"
+              style={{ 
+                width: '100%', 
+                minHeight: '80px', 
+                resize: 'vertical',
+                padding: '12px',
+                fontFamily: 'inherit',
+                fontSize: '0.875rem'
+              }}
+            />
+          </div>
+
+          <div className="form-group" style={{ marginTop: '16px' }}>
+            <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>
+              Show this note when they switch to:
+            </label>
+            <select
+              value={noteTriggerStatus}
+              onChange={(e) => setNoteTriggerStatus(e.target.value)}
+              className="input-text"
+              style={{ width: '100%', padding: '8px 12px' }}
+            >
+              <option value="Free">Free</option>
+              <option value="Studying">Studying</option>
+              <option value="Sleeping">Sleeping</option>
+              <option value="Listening">Listening</option>
+            </select>
+          </div>
+
+          <button 
+            type="submit" 
+            className="btn btn-primary" 
+            style={{ width: '100%', marginTop: '20px' }}
+          >
+            Leave Note
+          </button>
+
+          {noteFeedback && (
+            <div style={{ 
+              color: '#065F46', 
+              backgroundColor: '#ECFDF5', 
+              border: '1px solid #A7F3D0',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.875rem', 
+              marginTop: '12px',
+              fontWeight: '500',
+              textAlign: 'center'
+            }}>
+              {noteFeedback}
+            </div>
+          )}
+        </form>
+      </div>
+
+      {/* Study Room Card */}
+      <div className="card card-left">
+        <h2>Study Room</h2>
+        
+        {/* Pomodoro Timer display */}
+        <div style={{ 
+          textAlign: 'center', 
+          margin: '20px 0', 
+          backgroundColor: '#FAF9F7', 
+          borderRadius: 'var(--radius)', 
+          border: '1px solid var(--border-color)',
+          padding: '24px 16px'
+        }}>
+          {/* Preset Buttons */}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '16px' }}>
+            {[15, 25, 45, 60].map((mins) => (
+              <button
+                key={mins}
+                onClick={() => handlePresetChange(mins)}
+                className="btn"
+                style={{
+                  width: 'auto',
+                  padding: '4px 10px',
+                  fontSize: '0.75rem',
+                  backgroundColor: durationMinutes === mins ? 'var(--accent-color)' : 'transparent',
+                  color: durationMinutes === mins ? 'white' : 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderColor: durationMinutes === mins ? 'var(--accent-color)' : 'var(--border-color)'
+                }}
+              >
+                {mins}m
+              </button>
+            ))}
+          </div>
+
+          {/* Large timer numbers */}
+          <div style={{ 
+            fontSize: '3rem', 
+            fontWeight: '700', 
+            fontFamily: 'monospace', 
+            letterSpacing: '0.05em',
+            color: timerActive ? 'var(--accent-color)' : 'var(--text-primary)',
+            margin: '8px 0'
+          }}>
+            {formatTime(remainingSeconds)}
+          </div>
+
+          {/* Start / Pause / Reset controls */}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '16px' }}>
+            {!timerActive ? (
+              <button 
+                onClick={() => handleTimerStart()} 
+                className="btn btn-primary"
+                style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem' }}
+              >
+                Start
+              </button>
+            ) : (
+              <button 
+                onClick={handleTimerPause} 
+                className="btn"
+                style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem', border: '1px solid var(--border-color)' }}
+              >
+                Pause
+              </button>
+            )}
+            <button 
+              onClick={handleTimerReset} 
+              className="btn"
+              style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem', border: '1px solid var(--border-color)' }}
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* Focus completion message */}
+          {focusCompletionMsg && (
+            <div style={{ 
+              color: '#065F46', 
+              fontSize: '0.875rem', 
+              fontWeight: '500', 
+              marginTop: '16px' 
+            }}>
+              {focusCompletionMsg}
+            </div>
+          )}
+        </div>
+
+        {/* Shared Task List */}
+        <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
+            Shared Task List
+          </h3>
+
+          <form onSubmit={handleAddTask} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <input
+              type="text"
+              placeholder="Add a study goal..."
+              value={newTaskText}
+              onChange={(e) => setNewTaskText(e.target.value)}
+              className="input-text"
+              style={{ flex: 1, padding: '8px 12px' }}
+            />
+            <button type="submit" className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }}>
+              Add
+            </button>
+          </form>
+
+          {/* Tasks checklist */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+            {tasks.length === 0 ? (
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', textAlign: 'center', fontStyle: 'italic', padding: '12px 0' }}>
+                No tasks added yet. Keep each other motivated!
+              </p>
+            ) : (
+              tasks.map((task) => (
+                <div 
+                  key={task._id} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    backgroundColor: '#FAF9F7',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={task.completed}
+                      onChange={() => handleToggleTask(task._id)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
+                    />
+                    <span style={{ 
+                      fontSize: '0.875rem', 
+                      color: task.completed ? 'var(--text-secondary)' : 'var(--text-primary)',
+                      textDecoration: task.completed ? 'line-through' : 'none',
+                      wordBreak: 'break-all'
+                    }}>
+                      {task.text}
+                    </span>
+                  </label>
+                  <button
+                    onClick={() => handleDeleteTask(task._id)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#EF4444',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      padding: '4px'
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Games Card */}
+      <div className="card card-left">
+        <h2>Games</h2>
+        
+        <div style={{ marginTop: '16px' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
+            Tic-Tac-Toe
+          </h3>
+
+          {!gameState ? (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                Play a quick game of Tic-Tac-Toe with your partner!
+              </p>
+              <button 
+                onClick={handleStartGame} 
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+              >
+                Start Game
+              </button>
+            </div>
+          ) : (
+            <div>
+              {/* Game Status/Result banner */}
+              <div style={{ 
+                textAlign: 'center', 
+                marginBottom: '16px', 
+                padding: '8px 12px',
+                backgroundColor: '#FAF9F7',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                color: 'var(--text-primary)'
+              }}>
+                {gameState.status === 'playing' ? (
+                  gameState.turnUserId === user._id ? (
+                    <span style={{ color: 'var(--accent-color)' }}>Your turn (Playing as {gameState.playerSymbols[user._id]})</span>
+                  ) : (
+                    <span>{partnerName || 'Partner'}'s turn</span>
+                  )
+                ) : gameState.status === 'won' ? (
+                  gameState.winnerUserId === user._id ? (
+                    <span style={{ color: '#065F46' }}>You won!</span>
+                  ) : (
+                    <span style={{ color: 'var(--accent-color)' }}>{partnerName || 'Partner'} won!</span>
+                  )
+                ) : (
+                  <span style={{ color: 'var(--text-secondary)' }}>It's a draw!</span>
+                )}
+              </div>
+
+              {/* 3x3 Tic-Tac-Toe Board Grid */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(3, 1fr)', 
+                gap: '8px', 
+                maxWidth: '240px', 
+                margin: '0 auto 20px auto'
+              }}>
+                {gameState.board.map((cell, index) => {
+                  const isMyTurn = gameState.status === 'playing' && gameState.turnUserId === user._id;
+                  const isEmpty = cell === null;
+                  const canClick = isMyTurn && isEmpty;
+                  
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => canClick && handleMakeMove(index)}
+                      className={canClick ? 'tictactoe-cell-active' : ''}
+                      style={{
+                        height: '72px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#FAF9F7',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '1.5rem',
+                        fontWeight: '700',
+                        color: cell === 'X' ? 'var(--accent-color)' : 'var(--text-primary)',
+                        cursor: canClick ? 'pointer' : 'default',
+                        userSelect: 'none',
+                        transition: 'all 0.2s ease-in-out'
+                      }}
+                    >
+                      {cell}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Play Again button */}
+              {gameState.status !== 'playing' && (
+                <button 
+                  onClick={handleResetGame} 
+                  className="btn btn-primary"
+                  style={{ width: '100%' }}
+                >
+                  Play Again
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Icebreakers Card */}
+      <div className="card card-left">
+        <h2>Icebreakers</h2>
+        
+        <div style={{ marginTop: '16px' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>
+            Would You Rather
+          </h3>
+
+          {icebreakerStatus === 'idle' ? (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                Answer fun questions privately, then reveal choices simultaneously!
+              </p>
+              <button 
+                onClick={handleStartIcebreaker} 
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+              >
+                Start Icebreaker
+              </button>
+            </div>
+          ) : (
+            <div>
+              {/* Question Banner */}
+              <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                <span style={{ 
+                  fontSize: '0.75rem', 
+                  fontWeight: '600', 
+                  color: 'var(--accent-color)', 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.05em' 
+                }}>
+                  Would you rather...
+                </span>
+              </div>
+
+              {/* Option Choice Panels */}
+              {icebreakerStatus === 'playing' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    onClick={() => handleIcebreakerAnswer('A')}
+                    className="btn"
+                    style={{
+                      padding: '16px 20px',
+                      textAlign: 'left',
+                      fontSize: '0.9375rem',
+                      fontWeight: '600',
+                      backgroundColor: '#FAF9F7',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {icebreakerPrompt.optionA}
+                  </button>
+
+                  <div style={{ 
+                    textAlign: 'center', 
+                    fontSize: '0.75rem', 
+                    fontWeight: '700', 
+                    color: 'var(--text-secondary)',
+                    margin: '4px 0' 
+                  }}>
+                    OR
+                  </div>
+
+                  <button
+                    onClick={() => handleIcebreakerAnswer('B')}
+                    className="btn"
+                    style={{
+                      padding: '16px 20px',
+                      textAlign: 'left',
+                      fontSize: '0.9375rem',
+                      fontWeight: '600',
+                      backgroundColor: '#FAF9F7',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {icebreakerPrompt.optionB}
+                  </button>
+                </div>
+              )}
+
+              {/* Waiting Panel */}
+              {icebreakerStatus === 'waiting' && (
+                <div style={{ padding: '16px', textAlign: 'center' }}>
+                  {/* Show my choice highlighted */}
+                  <div style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#FDF1EE',
+                    border: '1.5px solid var(--accent-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    color: 'var(--accent-color)',
+                    marginBottom: '16px',
+                    textAlign: 'left'
+                  }}>
+                    Your choice: {icebreakerChoice === 'A' ? icebreakerPrompt.optionA : icebreakerPrompt.optionB}
+                  </div>
+                  
+                  <div style={{ 
+                    fontSize: '0.875rem', 
+                    fontWeight: '600', 
+                    color: 'var(--text-secondary)',
+                    padding: '12px',
+                    backgroundColor: '#FAF9F7',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)'
+                  }}>
+                    Waiting for your partner to answer...
+                  </div>
+                </div>
+              )}
+
+              {/* Reveal Panel */}
+              {icebreakerStatus === 'reveal' && icebreakerRevealData && (
+                <div>
+                  {/* Matched/Mismatched Header */}
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.875rem',
+                    fontWeight: '700',
+                    marginBottom: '16px',
+                    backgroundColor: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                      ? '#E6F4EA' 
+                      : '#FAF9F7',
+                    color: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                      ? '#137333' 
+                      : 'var(--text-secondary)',
+                    border: '1px solid',
+                    borderColor: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                      ? '#81C784' 
+                      : 'var(--border-color)'
+                  }}>
+                    {Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                      ? "You both agreed!" 
+                      : "You picked differently!"}
+                  </div>
+
+                  {/* Choice Lists */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                    {Object.entries(icebreakerRevealData.choices).map(([uid, choice]) => {
+                      const name = icebreakerRevealData.names[uid] || 'Someone';
+                      const choiceText = choice === 'A' ? icebreakerPrompt.optionA : icebreakerPrompt.optionB;
+                      const isMe = uid === user._id;
+
+                      return (
+                        <div 
+                          key={uid}
+                          style={{
+                            padding: '12px 16px',
+                            backgroundColor: '#FAF9F7',
+                            border: isMe ? '1px solid var(--border-color)' : '1px solid var(--accent-color)',
+                            borderRadius: 'var(--radius-sm)'
+                          }}
+                        >
+                          <div style={{ 
+                            fontSize: '0.75rem', 
+                            fontWeight: '700', 
+                            color: isMe ? 'var(--text-secondary)' : 'var(--accent-color)',
+                            textTransform: 'uppercase',
+                            marginBottom: '4px'
+                          }}>
+                            {isMe ? 'You' : name}
+                          </div>
+                          <div style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+                            {choiceText}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Next Prompt Control */}
+                  <button 
+                    onClick={handleNextIcebreaker} 
+                    className="btn btn-primary"
+                    style={{ width: '100%' }}
+                  >
+                    Next Prompt
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Whiteboard Card */}
+      <div className="card card-left">
+        <h2>Whiteboard</h2>
+        
+        {/* Controls: Brush Presets & Width */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          gap: '12px',
+          marginBottom: '16px',
+          flexWrap: 'wrap'
+        }}>
+          {/* Preset Colors */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {['#1A1A1A', '#E8623F', '#4A90E2', '#2ECC71', '#F1C40F', '#9B59B6'].map((color) => (
+              <button
+                key={color}
+                onClick={() => setBrushColor(color)}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  backgroundColor: color,
+                  border: brushColor === color ? '2px solid #FFFFFF' : '1px solid var(--border-color)',
+                  boxShadow: brushColor === color ? '0 0 0 2px var(--accent-color)' : 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'all 0.15s ease'
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Size Preset controls */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Size:</span>
+            {[
+              { label: 'S', size: 2 },
+              { label: 'M', size: 5 },
+              { label: 'L', size: 12 }
+            ].map((preset) => (
+              <button
+                key={preset.size}
+                onClick={() => setBrushWidth(preset.size)}
+                className="btn"
+                style={{
+                  width: 'auto',
+                  padding: '2px 8px',
+                  fontSize: '0.7rem',
+                  backgroundColor: brushWidth === preset.size ? 'var(--accent-color)' : 'transparent',
+                  color: brushWidth === preset.size ? 'white' : 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderColor: brushWidth === preset.size ? 'var(--accent-color)' : 'var(--border-color)'
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Canvas container */}
+        <div style={{ 
+          position: 'relative', 
+          width: '100%', 
+          backgroundColor: '#FFFFFF',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-sm)',
+          overflow: 'hidden',
+          aspectRatio: '3/2',
+          touchAction: 'none'
+        }}>
+          <canvas
+            ref={canvasRef}
+            width={600}
+            height={400}
+            onMouseDown={handleStartDrawing}
+            onMouseMove={handleDrawing}
+            onMouseUp={handleStopDrawing}
+            onMouseLeave={handleStopDrawing}
+            onTouchStart={handleStartDrawing}
+            onTouchMove={handleDrawing}
+            onTouchEnd={handleStopDrawing}
+            style={{
+              display: 'block',
+              width: '100%',
+              height: '100%',
+              cursor: 'crosshair'
+            }}
+          />
+        </div>
+
+        {/* Clear Button */}
+        <button
+          onClick={handleClearCanvas}
+          className="btn"
+          style={{
+            width: '100%',
+            marginTop: '16px',
+            padding: '8px 12px',
+            fontSize: '0.8125rem',
+            color: '#EF4444',
+            backgroundColor: 'transparent',
+            border: '1px solid #FCA5A5'
+          }}
+        >
+          Clear Canvas
+        </button>
       </div>
 
       {/* Music Card */}

@@ -6,21 +6,7 @@ const fs = require('fs');
 const Song = require('../models/Song');
 const auth = require('../middleware/auth');
 
-// Multer storage configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../uploads/songs');
-    // Ensure directory exists
-    fs.mkdirSync(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    // Generate a unique safe filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-  }
-});
+const { musicStorage } = require('../utils/cloudinary');
 
 // Multer file filter config
 const fileFilter = (req, file, cb) => {
@@ -36,7 +22,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-  storage: storage,
+  storage: musicStorage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 15 * 1024 * 1024 // 15MB
@@ -70,7 +56,8 @@ router.post('/upload', auth, (req, res) => {
 
       const song = new Song({
         title: title,
-        fileUrl: `/uploads/songs/${req.file.filename}`,
+        fileUrl: req.file.path,
+        publicId: req.file.filename,
         uploadedBy: req.user._id,
         pairId: req.user.pairId
       });

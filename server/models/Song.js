@@ -11,6 +11,10 @@ const songSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  publicId: {
+    type: String,
+    trim: true
+  },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
