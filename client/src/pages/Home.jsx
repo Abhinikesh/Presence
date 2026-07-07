@@ -75,6 +75,14 @@ function Home() {
   const [icebreakerChoice, setIcebreakerChoice] = useState(null);
   const [icebreakerStatus, setIcebreakerStatus] = useState('idle');
   const [icebreakerRevealData, setIcebreakerRevealData] = useState(null);
+
+  // Persistence State & Refs
+  const [partnerId, setPartnerId] = useState('');
+  const partnerIdRef = useRef('');
+  useEffect(() => {
+    partnerIdRef.current = partnerId;
+  }, [partnerId]);
+  const [scores, setScores] = useState({ me: 0, partner: 0, draws: 0 });
   useEffect(() => {
     durationMinutesRef.current = durationMinutes;
   }, [durationMinutes]);
@@ -360,6 +368,9 @@ function Home() {
 
     socket.on('game_state_update', (game) => {
       setGameState(game);
+      if (game && (game.status === 'won' || game.status === 'draw')) {
+        fetchPairState(partnerIdRef.current);
+      }
     });
 
     socket.on('canvas_sync_draw', (data) => {
@@ -481,6 +492,98 @@ function Home() {
     }
   };
 
+  const replayStrokes = (strokes) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !strokes || !Array.isArray(strokes)) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    strokes.forEach(stroke => {
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.lineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(stroke.prevX * canvas.width, stroke.prevY * canvas.height);
+      ctx.lineTo(stroke.x * canvas.width, stroke.y * canvas.height);
+      ctx.stroke();
+      ctx.closePath();
+    });
+  };
+
+  const fetchPairState = async (pId = partnerId) => {
+    if (!token || !pId) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/pair-state`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+
+        // 1. Restore Whiteboard
+        if (data.whiteboardData) {
+          try {
+            const strokes = JSON.parse(data.whiteboardData);
+            if (Array.isArray(strokes)) {
+              setTimeout(() => replayStrokes(strokes), 100);
+            }
+          } catch (e) {
+            console.error('Error parsing whiteboard data:', e);
+          }
+        }
+
+        // 2. Restore Scores
+        if (data.ticTacToeScore) {
+          const { user1Wins, user2Wins, draws } = data.ticTacToeScore;
+          const myId = String(user._id);
+          if (myId < pId) {
+            setScores({ me: user1Wins, partner: user2Wins, draws });
+          } else {
+            setScores({ me: user2Wins, partner: user1Wins, draws });
+          }
+        }
+
+        // 3. Restore Timer
+        if (data.studyTimer) {
+          const { isRunning, remainingSeconds: savedRemaining, durationMinutes: savedDuration } = data.studyTimer;
+          setDurationMinutes(savedDuration);
+          durationMinutesRef.current = savedDuration;
+
+          if (isRunning) {
+            const elapsed = Math.floor((Date.now() - new Date(data.updatedAt).getTime()) / 1000);
+            const remaining = Math.max(0, savedRemaining - elapsed);
+            setRemainingSeconds(remaining);
+            
+            if (remaining > 0) {
+              setTimerActive(true);
+              if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+              timerIntervalRef.current = setInterval(() => {
+                setRemainingSeconds((prev) => {
+                  if (prev <= 1) {
+                    clearInterval(timerIntervalRef.current);
+                    setTimerActive(false);
+                    setFocusCompletionMsg(`Session complete! You both focused for ${savedDuration} minutes`);
+                    return 0;
+                  }
+                  return prev - 1;
+                });
+              }, 1000);
+            } else {
+              setTimerActive(false);
+              setFocusCompletionMsg(`Session complete! You both focused for ${savedDuration} minutes`);
+            }
+          } else {
+            setRemainingSeconds(savedRemaining);
+            setTimerActive(false);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching pair state:', err);
+    }
+  };
+
   useEffect(() => {
     const fetchPairStatus = async () => {
       if (!token) return;
@@ -496,8 +599,10 @@ function Home() {
           const data = await response.json();
           if (data.paired) {
             setPartnerName(data.partner.name);
+            setPartnerId(data.partner.id);
             fetchPendingNote();
             fetchTasks();
+            fetchPairState(data.partner.id);
           } else {
             // If not paired, redirect to pair page
             navigate('/pair');
@@ -1186,13 +1291,40 @@ function Home() {
     return <div style={{ textAlign: 'center', marginTop: '40px' }}>Loading...</div>;
   }
 
+  // Tilt card handlers — max 5° rotation, driven via CSS custom properties
+  const handleTiltMove = (e) => {
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const rotateY = ((x - centerX) / centerX) * 5;
+    const rotateX = -((y - centerY) / centerY) * 5;
+    card.style.setProperty('--tiltX', `${rotateX.toFixed(2)}deg`);
+    card.style.setProperty('--tiltY', `${rotateY.toFixed(2)}deg`);
+  };
+
+  const handleTiltLeave = (e) => {
+    const card = e.currentTarget;
+    card.classList.add('tilt-reset');
+    card.style.setProperty('--tiltX', '0deg');
+    card.style.setProperty('--tiltY', '0deg');
+    setTimeout(() => card.classList.remove('tilt-reset'), 500);
+  };
+
   return (
     <div className="home-wrapper">
-      {/* Background Blobs */}
+      {/* Grain texture overlay for premium tactile depth */}
+      <div className="bg-grain" />
+
+      {/* Background Blobs — 5-layer depth system */}
       <div className="bg-blobs-premium">
-        <div className="blob-coral" style={{ top: '-10%', left: '-10%', width: '40vw', height: '40vw' }} />
-        <div className="blob-purple" style={{ bottom: '-10%', right: '-10%', width: '50vw', height: '50vw' }} />
-        <div className="blob-yellow" style={{ top: '40%', left: '40%', width: '30vw', height: '30vw', opacity: 0.03 }} />
+        <div className="blob-coral" />
+        <div className="blob-purple" />
+        <div className="blob-yellow" />
+        <div className="blob-teal" />
+        <div className="blob-rose" />
       </div>
 
       {/* Leave-behind Note Modal Overlay */}
@@ -1368,7 +1500,7 @@ function Home() {
         {/* Quick Actions Zone */}
         <div className="quick-actions-strip">
           {/* Left Panel: Status Selectors */}
-          <div className="quick-actions-panel">
+          <div className="quick-actions-panel" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Your Status</h3>
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
               You are currently: <strong style={{ color: 'var(--text-primary)' }}>{myStatus}</strong>
@@ -1445,7 +1577,7 @@ function Home() {
           </div>
 
           {/* Right Panel: Send Signal / Leave Note */}
-          <div className="quick-actions-panel">
+          <div className="quick-actions-panel" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Interact</h3>
             
             <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '8px' }}>
@@ -1519,7 +1651,7 @@ function Home() {
         {/* Feature Grid */}
         <div className="dashboard-grid">
           {/* Study Room Card */}
-          <div className="feature-card card-accent-study">
+          <div className="feature-card card-accent-study" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Study Room <span style={{ fontSize: '0.75rem', color: '#4A90E2', fontWeight: 'bold', textTransform: 'uppercase' }}>Focus Zone</span></h2>
             
             {/* Pomodoro Timer display */}
@@ -1684,13 +1816,41 @@ function Home() {
           </div>
 
           {/* Games Card */}
-          <div className="feature-card card-accent-games">
+          <div className="feature-card card-accent-games" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Games <span style={{ fontSize: '0.75rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase' }}>Play Time</span></h2>
             
             <div style={{ marginTop: '12px' }}>
               <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
                 Tic-Tac-Toe
               </h3>
+
+              {/* Scoreboard */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#F5F3FF',
+                borderRadius: 'var(--radius-sm)',
+                padding: '8px 16px',
+                marginBottom: '16px',
+                border: '1px solid #DDD6FE',
+                fontSize: '0.8125rem',
+                fontWeight: '600',
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#7C3AED', fontSize: '1.1rem', fontWeight: '800' }}>{scores.me}</div>
+                  <div style={{ color: '#6B7280', fontWeight: '500' }}>You</div>
+                </div>
+                <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: '0.75rem', fontWeight: '500' }}>— Score —</div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#EC4899', fontSize: '1.1rem', fontWeight: '800' }}>{scores.draws}</div>
+                  <div style={{ color: '#6B7280', fontWeight: '500' }}>Draws</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#F59E0B', fontSize: '1.1rem', fontWeight: '800' }}>{scores.partner}</div>
+                  <div style={{ color: '#6B7280', fontWeight: '500' }}>{partnerName || 'Partner'}</div>
+                </div>
+              </div>
 
               {!gameState ? (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
@@ -1792,7 +1952,7 @@ function Home() {
           </div>
 
           {/* Icebreakers Card */}
-          <div className="feature-card card-accent-icebreakers">
+          <div className="feature-card card-accent-icebreakers" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Icebreakers <span style={{ fontSize: '0.75rem', color: '#EC4899', fontWeight: 'bold', textTransform: 'uppercase' }}>Would You Rather</span></h2>
             
             <div style={{ marginTop: '12px' }}>
@@ -1986,7 +2146,7 @@ function Home() {
           </div>
 
           {/* Whiteboard Card */}
-          <div className="feature-card card-accent-whiteboard">
+          <div className="feature-card card-accent-whiteboard" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Whiteboard <span style={{ fontSize: '0.75rem', color: '#2ECC71', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Canvas</span></h2>
             
             {/* Controls: Brush Presets & Width */}
@@ -2097,7 +2257,7 @@ function Home() {
           </div>
 
           {/* Music Card */}
-          <div className="feature-card card-accent-music">
+          <div className="feature-card card-accent-music" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></h2>
             
             {/* Upload Form */}
@@ -2217,7 +2377,7 @@ function Home() {
           </div>
 
           {/* Watch Together Card */}
-          <div className="feature-card card-accent-watch">
+          <div className="feature-card card-accent-watch" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Watch Together <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 'bold', textTransform: 'uppercase' }}>Sync Video</span></h2>
             
             {/* URL Input Form */}

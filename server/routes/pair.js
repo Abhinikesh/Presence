@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const PairState = require('../models/PairState');
 const auth = require('../middleware/auth');
 
 // POST /api/pair/connect - Connect to a partner using their pairCode
@@ -92,6 +93,10 @@ router.post('/unpair', auth, async (req, res) => {
     if (!currentUser.pairId) {
       return res.status(400).json({ error: 'You are not currently paired' });
     }
+
+    // Delete the PairState record for this pair
+    const pairId = [currentUser._id.toString(), currentUser.pairId.toString()].sort().join('-');
+    await PairState.deleteOne({ pairId });
 
     // Find the partner
     const partner = await User.findById(currentUser.pairId);

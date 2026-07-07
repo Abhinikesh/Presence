@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const Video = require('./models/Video');
 const Note = require('./models/Note');
+const PairState = require('./models/PairState');
 const { cloudinary } = require('./utils/cloudinary');
 require('dotenv').config();
 
@@ -102,6 +103,130 @@ function checkWinner(board) {
   return null;
 }
 
+const whiteboardStrokes = new Map();
+const whiteboardDebounceTimers = new Map();
+
+async function updateTicTacToeScore(gameKey, winnerUserId, isDraw) {
+  try {
+    const sortedUserIds = gameKey.split('-');
+    const user1Id = sortedUserIds[0];
+    const user2Id = sortedUserIds[1];
+
+    let updateQuery = {};
+    if (isDraw) {
+      updateQuery = { $inc: { 'ticTacToeScore.draws': 1 } };
+    } else if (winnerUserId === user1Id) {
+      updateQuery = { $inc: { 'ticTacToeScore.user1Wins': 1 } };
+    } else if (winnerUserId === user2Id) {
+      updateQuery = { $inc: { 'ticTacToeScore.user2Wins': 1 } };
+    }
+
+    await PairState.findOneAndUpdate(
+      { pairId: gameKey },
+      updateQuery,
+      { new: true, upsert: true }
+    );
+  } catch (err) {
+    console.error('Error updating game score in PairState:', err);
+  }
+}
+
+async function saveWhiteboardStroke(gameKey, stroke) {
+  try {
+    if (!whiteboardStrokes.has(gameKey)) {
+      const pairState = await PairState.findOne({ pairId: gameKey });
+      let existingStrokes = [];
+      if (pairState && pairState.whiteboardData) {
+        try {
+          existingStrokes = JSON.parse(pairState.whiteboardData);
+          if (!Array.isArray(existingStrokes)) existingStrokes = [];
+        } catch (e) {
+          existingStrokes = [];
+        }
+      }
+      whiteboardStrokes.set(gameKey, existingStrokes);
+    }
+
+    const strokes = whiteboardStrokes.get(gameKey);
+    strokes.push(stroke);
+
+    if (whiteboardDebounceTimers.has(gameKey)) {
+      clearTimeout(whiteboardDebounceTimers.get(gameKey));
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        await PairState.findOneAndUpdate(
+          { pairId: gameKey },
+          { whiteboardData: JSON.stringify(strokes), updatedAt: Date.now() },
+          { new: true, upsert: true }
+        );
+        whiteboardDebounceTimers.delete(gameKey);
+      } catch (err) {
+        console.error('Error saving whiteboard state in debounce:', err);
+      }
+    }, 5000);
+
+    whiteboardDebounceTimers.set(gameKey, timer);
+  } catch (err) {
+    console.error('Error handling saveWhiteboardStroke:', err);
+  }
+}
+
+async function clearWhiteboardState(gameKey) {
+  try {
+    whiteboardStrokes.set(gameKey, []);
+
+    if (whiteboardDebounceTimers.has(gameKey)) {
+      clearTimeout(whiteboardDebounceTimers.get(gameKey));
+      whiteboardDebounceTimers.delete(gameKey);
+    }
+
+    await PairState.findOneAndUpdate(
+      { pairId: gameKey },
+      { whiteboardData: '', updatedAt: Date.now() },
+      { new: true, upsert: true }
+    );
+  } catch (err) {
+    console.error('Error clearing whiteboard state:', err);
+  }
+}
+
+async function saveTimerState(gameKey, timerData) {
+  try {
+    let updateFields = {};
+    if (timerData.reset) {
+      const state = await PairState.findOne({ pairId: gameKey });
+      const duration = (state && state.studyTimer && state.studyTimer.durationMinutes) || 25;
+      updateFields = {
+        'studyTimer.isRunning': false,
+        'studyTimer.remainingSeconds': duration * 60,
+        updatedAt: Date.now()
+      };
+    } else {
+      if (timerData.isRunning !== undefined) {
+        updateFields['studyTimer.isRunning'] = timerData.isRunning;
+      }
+      if (timerData.remainingSeconds !== undefined) {
+        updateFields['studyTimer.remainingSeconds'] = timerData.remainingSeconds;
+      }
+      if (timerData.durationMinutes !== undefined) {
+        updateFields['studyTimer.durationMinutes'] = timerData.durationMinutes;
+      }
+      updateFields.updatedAt = Date.now();
+    }
+
+    await PairState.findOneAndUpdate(
+      { pairId: gameKey },
+      updateFields,
+      { new: true, upsert: true }
+    );
+  } catch (err) {
+    console.error('Error saving timer state in PairState:', err);
+  }
+}
+
+
 const app = express();
 const port = process.env.PORT || 5000;
 const path = require('path');
@@ -122,6 +247,7 @@ const songsRouter = require('./routes/songs');
 const videosRouter = require('./routes/videos');
 const notesRouter = require('./routes/notes');
 const tasksRouter = require('./routes/tasks');
+const pairStateRouter = require('./routes/pairState');
 
 // Single test route
 app.get('/api/health', (req, res) => {
@@ -135,6 +261,7 @@ app.use('/api/songs', songsRouter);
 app.use('/api/videos', videosRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/tasks', tasksRouter);
+app.use('/api/pair-state', pairStateRouter);
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -468,6 +595,12 @@ io.on('connection', async (socket) => {
         if (partnerInfo) {
           io.to(partnerInfo.socketId).emit('timer_sync_start', data);
         }
+        const gameKey = getGameKey(userId, user.pairId.toString());
+        await saveTimerState(gameKey, {
+          isRunning: true,
+          remainingSeconds: data.durationMinutes * 60,
+          durationMinutes: data.durationMinutes
+        });
       }
     } catch (err) {
       console.error(`Error relaying timer_start for user ${userId}:`, err);
@@ -482,6 +615,11 @@ io.on('connection', async (socket) => {
         if (partnerInfo) {
           io.to(partnerInfo.socketId).emit('timer_sync_pause', data);
         }
+        const gameKey = getGameKey(userId, user.pairId.toString());
+        await saveTimerState(gameKey, {
+          isRunning: false,
+          remainingSeconds: data.remainingSeconds
+        });
       }
     } catch (err) {
       console.error(`Error relaying timer_pause for user ${userId}:`, err);
@@ -496,6 +634,11 @@ io.on('connection', async (socket) => {
         if (partnerInfo) {
           io.to(partnerInfo.socketId).emit('timer_sync_reset');
         }
+        const gameKey = getGameKey(userId, user.pairId.toString());
+        await saveTimerState(gameKey, {
+          isRunning: false,
+          reset: true
+        });
       }
     } catch (err) {
       console.error(`Error relaying timer_reset for user ${userId}:`, err);
@@ -564,8 +707,10 @@ io.on('connection', async (socket) => {
       if (winnerSymbol) {
         game.status = 'won';
         game.winnerUserId = userId;
+        await updateTicTacToeScore(gameKey, userId, false);
       } else if (game.board.every((cell) => cell !== null)) {
         game.status = 'draw';
+        await updateTicTacToeScore(gameKey, null, true);
       } else {
         game.turnUserId = partnerId;
       }
@@ -630,10 +775,13 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
         if (partnerInfo) {
           io.to(partnerInfo.socketId).emit('canvas_sync_draw', data);
         }
+        const gameKey = getGameKey(userId, partnerId);
+        await saveWhiteboardStroke(gameKey, data);
       }
     } catch (err) {
       console.error(`Error relaying canvas_draw for user ${userId}:`, err);
@@ -644,10 +792,13 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
         if (partnerInfo) {
           io.to(partnerInfo.socketId).emit('canvas_sync_clear');
         }
+        const gameKey = getGameKey(userId, partnerId);
+        await clearWhiteboardState(gameKey);
       }
     } catch (err) {
       console.error(`Error relaying canvas_clear for user ${userId}:`, err);
