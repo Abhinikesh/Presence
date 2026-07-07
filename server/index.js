@@ -400,6 +400,27 @@ const DESIRE_PROMPTS = [
   // Mixed
   { category: 'romance', question: 'The most romantic thing your partner could do tomorrow is…', optionA: 'Leave a note somewhere only you would find it', optionB: 'Cancel everything and spend the whole day with just you' },
   { category: 'fantasy', question: 'The scenario that makes your heart race most is…', optionA: 'Being found and chosen by someone who adores you', optionB: 'Running away together from everything and everyone else' },
+  // 🔥 Spicy
+  { category: 'spicy', question: 'You prefer the vibe in bed to be…', optionA: 'Slow, sensual and deeply intimate — savour every second', optionB: 'Raw, intense and completely unrestrained — no holding back' },
+  { category: 'spicy', question: 'When it comes to initiating, you are…', optionA: 'The one who makes the first move — you love the chase', optionB: 'The one who loves being chased and pulled in' },
+  { category: 'spicy', question: 'The kind of dirty talk you\'re into is…', optionA: 'Whispered, intimate, close to the ear — soft and filthy', optionB: 'Bold and explicit — hearing exactly what they want to do to you' },
+  { category: 'spicy', question: 'Your favourite place to be touched first is…', optionA: 'Neck and ears — you melt instantly', optionB: 'Waist and lower back — it sends electricity everywhere' },
+  { category: 'spicy', question: 'When it comes to control in bed, you prefer…', optionA: 'Being in control — you love setting the pace and calling the shots', optionB: 'Letting go of control — being fully at their mercy' },
+  { category: 'spicy', question: 'The fantasy you\'ve never admitted out loud is…', optionA: 'A strangers-in-a-hotel scenario — all desire, no names', optionB: 'Being completely blindfolded and surprised by your partner' },
+  { category: 'spicy', question: 'What turns you on more outside the bedroom is…', optionA: 'A lingering look across the room that says everything without words', optionB: 'Their hand on the small of your back in public — knowing and possessive' },
+  { category: 'spicy', question: 'The body part you find most irresistible on your partner is…', optionA: 'Their hands — the things they can do with them', optionB: 'Their lips — how they look before they kiss you' },
+  { category: 'spicy', question: 'When it comes to foreplay, you believe…', optionA: 'The longer the better — build it until you can\'t stand it', optionB: 'Sometimes you want to skip straight to the good part' },
+  { category: 'spicy', question: 'Your hottest sexual fantasy involves…', optionA: 'Being taken completely by surprise when you least expect it', optionB: 'A slow, deliberate seduction that plays out all night long' },
+  { category: 'spicy', question: 'The thing that gets you in the mood fastest is…', optionA: 'Them being confident and knowing exactly what they want', optionB: 'The slow build — stolen glances, accidental touches, tension' },
+  { category: 'spicy', question: 'When you\'re sexting, you prefer to…', optionA: 'Send explicit descriptions of exactly what you want them to do', optionB: 'Play coy and let the tension build with what you don\'t say' },
+  { category: 'spicy', question: 'Your preferred location for sex, other than the bedroom, is…', optionA: 'Against the kitchen counter — spontaneous and urgent', optionB: 'In the shower — wet, hot and completely uninhibited' },
+  { category: 'spicy', question: 'When it comes to trying new things in bed, you are…', optionA: 'Always down — the more adventurous the better', optionB: 'Open, but you need to feel completely safe and trusted first' },
+  { category: 'spicy', question: 'The kind of sex you crave most right now is…', optionA: 'Passionate and emotional — where you feel completely connected', optionB: 'Purely physical — raw, animal and mindless' },
+  { category: 'spicy', question: 'You find it hottest when your partner…', optionA: 'Takes charge completely and doesn\'t ask — just acts', optionB: 'Asks what you want in the most seductive way possible' },
+  { category: 'spicy', question: 'After sex, you are more…', optionA: 'Clingy — you want to be held, talked to, stay tangled up', optionB: 'Euphoric and independent — you ride the high in your own space' },
+  { category: 'spicy', question: 'The thing you want your partner to do more of in bed is…', optionA: 'Use their mouth — words, kisses, everything', optionB: 'Use their hands — on you, always, everywhere' },
+  { category: 'spicy', question: 'Your biggest turn-on that\'s hard to admit is…', optionA: 'Being completely exposed and seen — raw vulnerability as foreplay', optionB: 'The power dynamic — knowing they want you so badly they lose control' },
+  { category: 'spicy', question: 'The setting of your hottest sexual memory or fantasy is…', optionA: 'Somewhere risky — where you might get caught', optionB: 'Somewhere completely private — where you can be completely loud and free' },
 ];
 
 function getDesirePromptIndex(recentList, category) {

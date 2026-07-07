@@ -2686,6 +2686,7 @@ function Home() {
                 { id: 'desires', label: '🌹 Desires' },
                 { id: 'fantasy', label: '🎭 Fantasy' },
                 { id: 'compatibility', label: '💑 Compatibility' },
+                { id: 'spicy', label: '🔥 Spicy' },
               ].map(c => (
                 <button
                   key={c.id}
@@ -2740,6 +2741,7 @@ function Home() {
                     {desirePrompt.category === 'romance' ? '💕 Romance'
                       : desirePrompt.category === 'desires' ? '🌹 Desires'
                       : desirePrompt.category === 'fantasy' ? '🎭 Fantasy'
+                      : desirePrompt.category === 'spicy' ? '🔥 Spicy'
                       : '💑 Compatibility'}
                   </div>
                   <div className="desire-question-text">{desirePrompt.question}</div>
@@ -2790,6 +2792,7 @@ function Home() {
                     {desireReveal.currentPrompt?.category === 'romance' ? '💕 Romance'
                       : desireReveal.currentPrompt?.category === 'desires' ? '🌹 Desires'
                       : desireReveal.currentPrompt?.category === 'fantasy' ? '🎭 Fantasy'
+                      : desireReveal.currentPrompt?.category === 'spicy' ? '🔥 Spicy'
                       : '💑 Compatibility'}
                   </div>
                   <div className="desire-question-text">{desireReveal.currentPrompt?.question || desirePrompt.question}</div>

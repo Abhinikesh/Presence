@@ -1664,3 +1664,10 @@ h3 {
   color: #9D174D;
   font-weight: 700;
 }
+
+/* Spicy tab — orange-red flame accent */
+.desire-cat-btn[data-cat="spicy"].active,
+.desire-cat-btn.active:last-child {
+  background: linear-gradient(135deg, #EA580C, #DC2626);
+  border-color: #EA580C;
+}
