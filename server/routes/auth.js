@@ -100,56 +100,7 @@ router.post('/google', async (req, res) => {
     res.status(500).json({ error: 'Authentication failed: ' + error.message });
   }
 });
-
-// TEMPORARY DEV LOGIN - REMOVE BEFORE PRODUCTION
-router.post('/dev-login', async (req, res) => {
-  try {
-    const { name } = req.body;
-
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: 'Name is required' });
-    }
-
-    const trimmedName = name.trim();
-
-    // Check if user with that name already exists
-    let user = await User.findOne({ name: trimmedName });
-
-    if (!user) {
-      // Create a new user with that name
-      const pairCode = await generateUniquePairCode();
-      const fakeEmail = trimmedName.toLowerCase().replace(/\s+/g, '') + '@dev.local';
-      
-      user = new User({
-        name: trimmedName,
-        email: fakeEmail,
-        pairCode
-      });
-      await user.save();
-    }
-
-    // Generate our own JWT containing userId and id (for middleware)
-    const jwtToken = jwt.sign(
-      { id: user._id, userId: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      token: jwtToken,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        profilePicture: user.profilePicture,
-        pairCode: user.pairCode,
-        pairId: user.pairId
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Dev login failed: ' + error.message });
-  }
-});
+// Get Current Logged-in User
 
 // Get Current Logged-in User
 router.get('/me', auth, async (req, res) => {

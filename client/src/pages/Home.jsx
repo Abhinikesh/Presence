@@ -34,6 +34,22 @@ function Home() {
   // Audio ref
   const audioRef = useRef(null);
 
+  // Watch Together state
+  const [ytUrl, setYtUrl] = useState('');
+  const [ytError, setYtError] = useState('');
+  const [currentVideoId, setCurrentVideoId] = useState('');
+
+  // Spotify integration state
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [partnerSpotifyTrack, setPartnerSpotifyTrack] = useState(null);
+  const [spotifyNotification, setSpotifyNotification] = useState('');
+
+  // Watch Together refs
+  const ytPlayerRef = useRef(null);
+  const isIncomingSyncRef = useRef(false);
+  const lastPlayerTimeRef = useRef(0);
+  const seekCheckIntervalRef = useRef(null);
+
   // Refs for tracking current values to avoid stale closures in Socket callbacks
   const songsRef = useRef([]);
   useEffect(() => {
@@ -180,6 +196,46 @@ function Home() {
         fromName: data.fromName,
         type: data.type
       });
+    });
+
+    // YouTube sync listeners
+    socket.on('yt_sync_change_video', (data) => {
+      isIncomingSyncRef.current = true;
+      setCurrentVideoId(data.videoId);
+    });
+
+    socket.on('yt_sync_play', (data) => {
+      isIncomingSyncRef.current = true;
+      if (ytPlayerRef.current && ytPlayerRef.current.playVideo) {
+        if (typeof data.currentTime === 'number') {
+          ytPlayerRef.current.seekTo(data.currentTime, true);
+          lastPlayerTimeRef.current = data.currentTime;
+        }
+        ytPlayerRef.current.playVideo();
+      }
+    });
+
+    socket.on('yt_sync_pause', (data) => {
+      isIncomingSyncRef.current = true;
+      if (ytPlayerRef.current && ytPlayerRef.current.pauseVideo) {
+        ytPlayerRef.current.pauseVideo();
+        if (typeof data.currentTime === 'number') {
+          ytPlayerRef.current.seekTo(data.currentTime, true);
+          lastPlayerTimeRef.current = data.currentTime;
+        }
+      }
+    });
+
+    socket.on('yt_sync_seek', (data) => {
+      isIncomingSyncRef.current = true;
+      if (ytPlayerRef.current && ytPlayerRef.current.seekTo) {
+        ytPlayerRef.current.seekTo(data.currentTime, true);
+        lastPlayerTimeRef.current = data.currentTime;
+      }
+    });
+
+    socket.on('partner_spotify_update', (data) => {
+      setPartnerSpotifyTrack(data);
     });
 
     // Clean up socket connection on component unmount
@@ -384,6 +440,227 @@ function Home() {
     }
   };
 
+  // Synced YouTube Watching logic
+  const extractYoutubeVideoId = (url) => {
+    if (!url) return null;
+    const cleanUrl = url.trim();
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = cleanUrl.match(regExp);
+    
+    if (match && match[2].length === 11) {
+      return match[2];
+    }
+    
+    if (cleanUrl.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+      return cleanUrl;
+    }
+    
+    return null;
+  };
+
+  const startSeekCheck = () => {
+    stopSeekCheck();
+    if (!ytPlayerRef.current) return;
+    
+    lastPlayerTimeRef.current = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
+    
+    seekCheckIntervalRef.current = setInterval(() => {
+      const player = ytPlayerRef.current;
+      if (!player || !player.getCurrentTime) return;
+
+      const currentTime = player.getCurrentTime();
+      const state = player.getPlayerState ? player.getPlayerState() : -1;
+
+      if (state === 1) { // 1 = window.YT.PlayerState.PLAYING
+        const timeDiff = currentTime - lastPlayerTimeRef.current;
+        if (timeDiff < -0.5 || timeDiff > 3.5) {
+          if (!isIncomingSyncRef.current) {
+            if (socketRef.current) {
+              socketRef.current.emit('yt_seek', { currentTime });
+            }
+          }
+        }
+      }
+      lastPlayerTimeRef.current = currentTime;
+    }, 2000);
+  };
+
+  const stopSeekCheck = () => {
+    if (seekCheckIntervalRef.current) {
+      clearInterval(seekCheckIntervalRef.current);
+      seekCheckIntervalRef.current = null;
+    }
+  };
+
+  const onPlayerReady = () => {
+    // Player loaded and ready
+  };
+
+  const onPlayerStateChange = (event) => {
+    const state = event.data;
+    const player = ytPlayerRef.current;
+    if (!player) return;
+
+    const currentTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+
+    if (isIncomingSyncRef.current) {
+      isIncomingSyncRef.current = false;
+      if (state === 1) {
+        startSeekCheck();
+      } else {
+        stopSeekCheck();
+      }
+      return;
+    }
+
+    if (state === 1) { // PLAYING
+      if (socketRef.current) {
+        socketRef.current.emit('yt_play', { currentTime });
+      }
+      startSeekCheck();
+    } else if (state === 2) { // PAUSED
+      if (socketRef.current) {
+        socketRef.current.emit('yt_pause', { currentTime });
+      }
+      stopSeekCheck();
+    }
+  };
+
+  const handleLoadYtVideo = (e) => {
+    e.preventDefault();
+    setYtError('');
+    
+    const videoId = extractYoutubeVideoId(ytUrl);
+    if (!videoId) {
+      setYtError('Please enter a valid YouTube URL');
+      return;
+    }
+
+    setCurrentVideoId(videoId);
+    
+    if (socketRef.current) {
+      socketRef.current.emit('yt_change_video', { videoId });
+    }
+  };
+
+  // Dynamically load YouTube IFrame API script once on mount
+  useEffect(() => {
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+  }, []);
+
+  // Initialize and clean up player instance when currentVideoId changes
+  useEffect(() => {
+    if (!currentVideoId) return;
+
+    let playerInstance = null;
+
+    const initPlayer = () => {
+      const playerContainer = document.getElementById('youtube-player');
+      if (!playerContainer) return;
+
+      playerInstance = new window.YT.Player('youtube-player', {
+        height: '100%',
+        width: '100%',
+        videoId: currentVideoId,
+        playerVars: {
+          playsinline: 1,
+          rel: 0,
+          modestbranding: 1
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange
+        }
+      });
+      ytPlayerRef.current = playerInstance;
+    };
+
+    if (window.YT && window.YT.Player) {
+      initPlayer();
+    } else {
+      const previousCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (previousCallback) previousCallback();
+        initPlayer();
+      };
+    }
+
+    return () => {
+      if (playerInstance && playerInstance.destroy) {
+        playerInstance.destroy();
+        ytPlayerRef.current = null;
+      }
+      stopSeekCheck();
+    };
+  }, [currentVideoId]);
+
+  // Spotify integration handlers and effects
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const spotifyStatus = params.get('spotify');
+    if (spotifyStatus === 'connected') {
+      setSpotifyNotification('Spotify connected successfully!');
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+      setTimeout(() => {
+        setSpotifyNotification('');
+      }, 4000);
+    } else if (spotifyStatus === 'error' || spotifyStatus === 'failed') {
+      setError('Failed to connect Spotify account.');
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, []);
+
+  const fetchSpotifyStatus = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/spotify/status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSpotifyConnected(data.spotifyConnected);
+      }
+    } catch (err) {
+      console.error('Error fetching Spotify status:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSpotifyStatus();
+  }, [token]);
+
+  const handleSpotifyConnect = () => {
+    window.location.href = `${BACKEND_URL}/api/spotify/login?token=${token}`;
+  };
+
+  const handleSpotifyDisconnect = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/spotify/disconnect`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        setSpotifyConnected(false);
+      } else {
+        setError('Failed to disconnect Spotify account.');
+      }
+    } catch (err) {
+      setError('Network error disconnecting Spotify.');
+    }
+  };
+
   const formatTime = (time) => {
     if (isNaN(time)) return '0:00';
     const mins = Math.floor(time / 60);
@@ -418,6 +695,32 @@ function Home() {
           Reconnecting...
         </div>
       )}
+      
+      {/* Spotify success banner */}
+      {spotifyNotification && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1200,
+            backgroundColor: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            borderLeft: '4px solid #10B981',
+            color: '#065F46',
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            padding: '12px 24px',
+            borderRadius: '6px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            animation: 'slideDown 0.3s ease-out'
+          }}
+        >
+          {spotifyNotification}
+        </div>
+      )}
+
       {/* Sliding notification banner */}
       {activePing && (
         <div
@@ -477,6 +780,25 @@ function Home() {
           </div>
         </div>
 
+        {partnerOnline && partnerSpotifyTrack && partnerSpotifyTrack.isPlaying && (
+          <div style={{ 
+            marginTop: '-12px', 
+            marginBottom: '24px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px',
+            padding: '8px 12px',
+            backgroundColor: '#FAF9F7',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border-color)',
+            width: 'fit-content'
+          }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Now playing: <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontStyle: 'italic' }}>{partnerSpotifyTrack.songName}</span> — <span style={{ fontStyle: 'italic' }}>{partnerSpotifyTrack.artistName}</span>
+            </span>
+          </div>
+        )}
+
         <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '8px' }}>
           You: <strong style={{ color: 'var(--text-primary)' }}>{myStatus}</strong>
         </p>
@@ -518,6 +840,40 @@ function Home() {
           >
             {sentStatus.thinking ? 'Sent!' : 'Send Thinking of You'}
           </button>
+        </div>
+
+        {/* Spotify Connection Panel */}
+        <div style={{ 
+          marginTop: '32px', 
+          paddingTop: '20px', 
+          borderTop: '1px solid var(--border-color)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>Spotify Integration</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              {spotifyConnected ? 'Spotify is connected' : 'Connect to show what you are playing'}
+            </p>
+          </div>
+          {spotifyConnected ? (
+            <button 
+              onClick={handleSpotifyDisconnect} 
+              className="btn" 
+              style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem', color: '#EF4444', borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }}
+            >
+              Disconnect
+            </button>
+          ) : (
+            <button 
+              onClick={handleSpotifyConnect} 
+              className="btn btn-primary" 
+              style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem' }}
+            >
+              Connect
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '16px', marginTop: '36px', justifyContent: 'center' }}>
@@ -667,6 +1023,55 @@ function Home() {
             >
               {isPlaying ? 'Pause' : 'Play'}
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* Watch Together Card */}
+      <div className="card card-left">
+        <h2>Watch Together</h2>
+        
+        {/* URL Input Form */}
+        <form onSubmit={handleLoadYtVideo} style={{ marginTop: '16px' }}>
+          <div className="form-group">
+            <label className="form-label">YouTube Link or Video ID</label>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <input
+                type="text"
+                placeholder="Paste link here..."
+                value={ytUrl}
+                onChange={(e) => setYtUrl(e.target.value)}
+                className="input-text"
+                style={{ flex: 1 }}
+              />
+              <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>
+                Load
+              </button>
+            </div>
+            {ytError && (
+              <div style={{ color: '#EF4444', fontSize: '0.875rem', marginTop: '4px' }}>
+                {ytError}
+              </div>
+            )}
+          </div>
+        </form>
+
+        {/* Player Container */}
+        {currentVideoId ? (
+          <div className="youtube-container" style={{ marginTop: '20px' }}>
+            <div id="youtube-player"></div>
+          </div>
+        ) : (
+          <div style={{ 
+            marginTop: '20px', 
+            padding: '40px 20px', 
+            textAlign: 'center', 
+            border: '1px dashed var(--border-color)', 
+            borderRadius: 'var(--radius)',
+            color: 'var(--text-secondary)',
+            fontSize: '0.875rem'
+          }}>
+            No video loaded. Enter a YouTube link above to start watching together.
           </div>
         )}
       </div>
