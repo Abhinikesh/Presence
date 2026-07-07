@@ -86,6 +86,15 @@ function Home() {
   const [icebreakerStatus, setIcebreakerStatus] = useState('idle');
   const [icebreakerRevealData, setIcebreakerRevealData] = useState(null);
 
+  // Desire Meets Discretion states
+  const [desireStatus, setDesireStatus] = useState('idle');          // idle | playing | waiting | reveal
+  const [desirePrompt, setDesirePrompt] = useState(null);            // { question, optionA, optionB, category, matchCount, totalCount }
+  const [desireChoice, setDesireChoice] = useState(null);            // 'A' | 'B'
+  const [desireReveal, setDesireReveal] = useState(null);            // full reveal payload
+  const [desireCategory, setDesireCategory] = useState('all');       // 'all' | 'romance' | 'desires' | 'fantasy' | 'compatibility'
+  const [desireMatchCount, setDesireMatchCount] = useState(0);
+  const [desireTotalCount, setDesireTotalCount] = useState(0);
+
   // Persistence State & Refs
   const [partnerId, setPartnerId] = useState('');
   const partnerIdRef = useRef('');
@@ -500,6 +509,27 @@ function Home() {
     socket.on('hangman_error', (data) => {
       setHangmanError(data.message || 'Something went wrong.');
       setTimeout(() => setHangmanError(''), 3000);
+    });
+
+    // Desire Meets Discretion listeners
+    socket.on('desire_new_prompt', (data) => {
+      setDesirePrompt(data);
+      setDesireChoice(null);
+      setDesireStatus('playing');
+      setDesireReveal(null);
+      setDesireMatchCount(data.matchCount || 0);
+      setDesireTotalCount(data.totalCount || 0);
+    });
+
+    socket.on('desire_waiting', () => {
+      setDesireStatus('waiting');
+    });
+
+    socket.on('desire_reveal', (data) => {
+      setDesireReveal(data);
+      setDesireStatus('reveal');
+      setDesireMatchCount(data.matchCount || 0);
+      setDesireTotalCount(data.totalCount || 0);
     });
 
     // Clean up socket connection on component unmount
@@ -1581,6 +1611,30 @@ function Home() {
       socketRef.current.emit('icebreaker_next');
     }
   };
+
+  // ─── Desire Meets Discretion handlers ────────────────────────────────────
+  const handleDesireStart = (cat = desireCategory) => {
+    if (!socketRef.current) return;
+    socketRef.current.emit('desire_start', { category: cat });
+  };
+
+  const handleDesireAnswer = (choice) => {
+    setDesireChoice(choice);
+    if (!socketRef.current) return;
+    socketRef.current.emit('desire_answer', { choice });
+  };
+
+  const handleDesireNext = () => {
+    if (!socketRef.current) return;
+    socketRef.current.emit('desire_next');
+  };
+
+  const handleDesireCategoryChange = (cat) => {
+    setDesireCategory(cat);
+    if (!socketRef.current) return;
+    socketRef.current.emit('desire_change_category', { category: cat });
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const formatTime = (time) => {
     if (isNaN(time)) return '0:00';

@@ -368,6 +368,52 @@ const tictactoeGames = new Map();
 // In-memory mapping of Icebreaker games: gameKey -> gameInfo
 const icebreakerGames = new Map();
 
+// ─── Desire Meets Discretion ─────────────────────────────────────────────────
+const DESIRE_PROMPTS = [
+  // 💕 Romance
+  { category: 'romance', question: 'Your idea of the most romantic surprise is…', optionA: 'A handwritten love letter left for you to find', optionB: 'Being taken on an unplanned midnight adventure' },
+  { category: 'romance', question: 'The moment you feel most in love is…', optionA: 'When they remember the tiny details you once mentioned', optionB: 'When they hold your hand without saying a word' },
+  { category: 'romance', question: 'Your perfect romantic evening looks like…', optionA: 'Cooking together with music playing softly', optionB: 'Stargazing on a blanket with takeout and candles' },
+  { category: 'romance', question: 'The most meaningful way to say "I love you" is…', optionA: 'Whispering it quietly in a tender moment', optionB: 'Showing it through a planned, thoughtful gesture' },
+  { category: 'romance', question: 'You fall harder for someone who…', optionA: 'Makes you laugh until your stomach hurts', optionB: 'Makes you feel completely seen and understood' },
+  { category: 'romance', question: 'Your favourite kind of date is…', optionA: 'Slow mornings with coffee and nowhere to be', optionB: 'A spontaneous night that turns into a story you tell for years' },
+  // 🌹 Desires
+  { category: 'desires', question: 'Your heart races most when your partner…', optionA: 'Unexpectedly pulls you close and whispers your name', optionB: 'Looks at you across a room like you\'re the only one there' },
+  { category: 'desires', question: 'The thing you secretly crave most in a relationship is…', optionA: 'Complete vulnerability — being fully known and still chosen', optionB: 'A quiet, burning tension that makes every moment electric' },
+  { category: 'desires', question: 'You feel most desired when…', optionA: 'They choose you again and again, even when they don\'t have to', optionB: 'They can\'t keep their eyes off you in a crowded room' },
+  { category: 'desires', question: 'What you want most at the end of a hard day is…', optionA: 'To be held in silence by the person you love', optionB: 'To have them distract you completely from the world' },
+  { category: 'desires', question: 'The kind of love you secretly crave most is…', optionA: 'Soft, steady and certain — like coming home', optionB: 'Intense, consuming and electric — like lightning in a storm' },
+  { category: 'desires', question: 'The thought that makes you blush most is…', optionA: 'Being completely known — every flaw, every fear — and still adored', optionB: 'Being wanted so badly that they can\'t even hide it' },
+  // 🎭 Fantasy
+  { category: 'fantasy', question: 'In your romantic fantasy, you and your partner are…', optionA: 'Strangers who meet on a train in a foreign city', optionB: 'Childhood friends who finally realise they were always in love' },
+  { category: 'fantasy', question: 'Your dream romantic escape is…', optionA: 'A secret cabin in the mountains, completely snowed in', optionB: 'A spontaneous flight to a city neither of you has been to' },
+  { category: 'fantasy', question: 'You imagine the most passionate kiss happening…', optionA: 'In the rain, after a long, aching separation', optionB: 'Slow and deliberate, with nowhere else to be' },
+  { category: 'fantasy', question: 'The role you play in your love fantasy…', optionA: 'The mysterious one who sweeps them off their feet', optionB: 'The devoted lover who knows every corner of their soul' },
+  { category: 'fantasy', question: 'The romantic scene you\'d replay forever is…', optionA: 'Lying in bed talking until 4am about everything and nothing', optionB: 'That first moment when you both knew — and neither said it yet' },
+  // 💑 Compatibility
+  { category: 'compatibility', question: 'In a relationship, you are more…', optionA: 'The initiator — grand gestures, first to say "I love you"', optionB: 'The sustainer — steady presence, the one they always return to' },
+  { category: 'compatibility', question: 'When things get difficult, you tend to…', optionA: 'Talk it through immediately — words help you process', optionB: 'Take space to think clearly, then return when you\'re ready' },
+  { category: 'compatibility', question: 'Your love language leans more toward…', optionA: 'Physical touch and quality time', optionB: 'Words of affirmation and acts of service' },
+  { category: 'compatibility', question: 'When you imagine your future together, you see…', optionA: 'A quiet life — a home, routines, deep familiarity', optionB: 'An adventurous life — always something new, always evolving' },
+  { category: 'compatibility', question: 'The relationship dynamic that feels most natural is…', optionA: 'Being their safe harbour — constant and calm', optionB: 'Being their spark — exciting and ever-inspiring' },
+  { category: 'compatibility', question: 'When you say "I need you", you mean…', optionA: 'You\'re my person — I can\'t imagine life without you', optionB: 'Right now, in this moment, please just be here with me' },
+  // Mixed
+  { category: 'romance', question: 'The most romantic thing your partner could do tomorrow is…', optionA: 'Leave a note somewhere only you would find it', optionB: 'Cancel everything and spend the whole day with just you' },
+  { category: 'fantasy', question: 'The scenario that makes your heart race most is…', optionA: 'Being found and chosen by someone who adores you', optionB: 'Running away together from everything and everyone else' },
+];
+
+function getDesirePromptIndex(recentList, category) {
+  const pool = category === 'all'
+    ? DESIRE_PROMPTS
+    : DESIRE_PROMPTS.filter(p => p.category === category);
+  const available = pool.map((_, i) => DESIRE_PROMPTS.indexOf(pool[i])).filter(i => !recentList.includes(i));
+  if (available.length === 0) return Math.floor(Math.random() * DESIRE_PROMPTS.length);
+  return available[Math.floor(Math.random() * available.length)];
+}
+
+const lovegameGames = new Map(); // gameKey -> { category, currentPrompt, recentPrompts[], answers{}, matchCount, totalCount }
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Socket.IO authentication middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -1165,6 +1211,137 @@ io.on('connection', async (socket) => {
       console.error('Error loading next icebreaker:', err);
     }
   });
+
+  // ─── Desire Meets Discretion Socket Events ───────────────────────────────
+
+  function emitDesirePrompt(gameKey, game, userInfo, partnerInfo) {
+    const payload = {
+      question: game.currentPrompt.question,
+      optionA: game.currentPrompt.optionA,
+      optionB: game.currentPrompt.optionB,
+      category: game.currentPrompt.category,
+      matchCount: game.matchCount,
+      totalCount: game.totalCount
+    };
+    if (userInfo) io.to(userInfo.socketId).emit('desire_new_prompt', payload);
+    if (partnerInfo) io.to(partnerInfo.socketId).emit('desire_new_prompt', payload);
+  }
+
+  socket.on('desire_start', async ({ category = 'all' } = {}) => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+
+      const game = lovegameGames.get(gameKey) || { category: 'all', recentPrompts: [], answers: {}, currentPrompt: null, matchCount: 0, totalCount: 0 };
+      game.category = category;
+      const idx = getDesirePromptIndex(game.recentPrompts, category);
+      game.recentPrompts.push(idx);
+      if (game.recentPrompts.length > 8) game.recentPrompts.shift();
+      game.currentPrompt = { ...DESIRE_PROMPTS[idx] };
+      game.answers = {};
+      lovegameGames.set(gameKey, game);
+
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+      emitDesirePrompt(gameKey, game, userInfo, partnerInfo);
+    } catch (err) {
+      console.error('desire_start error:', err);
+    }
+  });
+
+  socket.on('desire_answer', async ({ choice } = {}) => {
+    if (choice !== 'A' && choice !== 'B') return;
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const game = lovegameGames.get(gameKey);
+      if (!game || !game.currentPrompt) return;
+      if (game.answers[userId]) return; // already answered
+
+      game.answers[userId] = choice;
+      lovegameGames.set(gameKey, game);
+
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+
+      if (game.answers[userId] && game.answers[partnerId]) {
+        // Both answered — build reveal
+        const partnerUser = await User.findById(partnerId);
+        const currentUser = await User.findById(userId);
+        const isMatch = game.answers[userId] === game.answers[partnerId];
+        game.totalCount += 1;
+        if (isMatch) game.matchCount += 1;
+        lovegameGames.set(gameKey, game);
+
+        const revealPayload = {
+          choices: { [userId]: game.answers[userId], [partnerId]: game.answers[partnerId] },
+          names: { [userId]: currentUser ? currentUser.name : 'You', [partnerId]: partnerUser ? partnerUser.name : 'Partner' },
+          isMatch,
+          matchCount: game.matchCount,
+          totalCount: game.totalCount,
+          currentPrompt: game.currentPrompt
+        };
+        if (userInfo) io.to(userInfo.socketId).emit('desire_reveal', revealPayload);
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('desire_reveal', revealPayload);
+      } else {
+        // Only one answered — send waiting event to the person who just answered
+        if (userInfo) io.to(userInfo.socketId).emit('desire_waiting');
+      }
+    } catch (err) {
+      console.error('desire_answer error:', err);
+    }
+  });
+
+  socket.on('desire_next', async () => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const game = lovegameGames.get(gameKey) || { category: 'all', recentPrompts: [], answers: {}, currentPrompt: null, matchCount: 0, totalCount: 0 };
+      const idx = getDesirePromptIndex(game.recentPrompts, game.category || 'all');
+      game.recentPrompts.push(idx);
+      if (game.recentPrompts.length > 8) game.recentPrompts.shift();
+      game.currentPrompt = { ...DESIRE_PROMPTS[idx] };
+      game.answers = {};
+      lovegameGames.set(gameKey, game);
+
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+      emitDesirePrompt(gameKey, game, userInfo, partnerInfo);
+    } catch (err) {
+      console.error('desire_next error:', err);
+    }
+  });
+
+  socket.on('desire_change_category', async ({ category = 'all' } = {}) => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const game = lovegameGames.get(gameKey) || { category: 'all', recentPrompts: [], answers: {}, currentPrompt: null, matchCount: 0, totalCount: 0 };
+      game.category = category;
+      game.recentPrompts = [];
+      const idx = getDesirePromptIndex(game.recentPrompts, category);
+      game.recentPrompts.push(idx);
+      game.currentPrompt = { ...DESIRE_PROMPTS[idx] };
+      game.answers = {};
+      lovegameGames.set(gameKey, game);
+
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+      emitDesirePrompt(gameKey, game, userInfo, partnerInfo);
+    } catch (err) {
+      console.error('desire_change_category error:', err);
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   socket.on('disconnect', async () => {
     console.log(`User disconnected: ${userId} (Socket: ${socket.id})`);
