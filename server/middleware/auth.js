@@ -3,18 +3,13 @@ const User = require('../models/User');
 
 const auth = async (req, res, next) => {
   try {
-    // Check Authorization header or query token
+    // Check Authorization header
     const authHeader = req.header('Authorization');
-    let token = null;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.replace('Bearer ', '');
-    } else if (req.query.token) {
-      token = req.query.token;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required. Header format: Bearer <token>' });
     }
 
-    if (!token) {
-      return res.status(401).json({ error: 'Authentication required. Token missing.' });
-    }
+    const token = authHeader.replace('Bearer ', '');
     
     // Verify the JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);

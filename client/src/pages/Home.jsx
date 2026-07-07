@@ -39,16 +39,12 @@ function Home() {
   const [ytError, setYtError] = useState('');
   const [currentVideoId, setCurrentVideoId] = useState('');
 
-  // Spotify integration state
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
-  const [partnerSpotifyTrack, setPartnerSpotifyTrack] = useState(null);
-  const [spotifyNotification, setSpotifyNotification] = useState('');
-
   // Watch Together refs
   const ytPlayerRef = useRef(null);
   const isIncomingSyncRef = useRef(false);
   const lastPlayerTimeRef = useRef(0);
   const seekCheckIntervalRef = useRef(null);
+  const lastIncomingSyncTimeRef = useRef(0);
 
   // Refs for tracking current values to avoid stale closures in Socket callbacks
   const songsRef = useRef([]);
@@ -206,36 +202,47 @@ function Home() {
 
     socket.on('yt_sync_play', (data) => {
       isIncomingSyncRef.current = true;
-      if (ytPlayerRef.current && ytPlayerRef.current.playVideo) {
-        if (typeof data.currentTime === 'number') {
+      lastIncomingSyncTimeRef.current = Date.now();
+      if (ytPlayerRef.current) {
+        const localTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
+        const diff = Math.abs(localTime - data.currentTime);
+        
+        if (diff > 1.5 && ytPlayerRef.current.seekTo) {
           ytPlayerRef.current.seekTo(data.currentTime, true);
           lastPlayerTimeRef.current = data.currentTime;
         }
-        ytPlayerRef.current.playVideo();
+        
+        if (ytPlayerRef.current.playVideo) {
+          ytPlayerRef.current.playVideo();
+        }
       }
     });
 
     socket.on('yt_sync_pause', (data) => {
       isIncomingSyncRef.current = true;
-      if (ytPlayerRef.current && ytPlayerRef.current.pauseVideo) {
-        ytPlayerRef.current.pauseVideo();
-        if (typeof data.currentTime === 'number') {
+      lastIncomingSyncTimeRef.current = Date.now();
+      if (ytPlayerRef.current) {
+        const localTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
+        const diff = Math.abs(localTime - data.currentTime);
+        
+        if (diff > 1.5 && ytPlayerRef.current.seekTo) {
           ytPlayerRef.current.seekTo(data.currentTime, true);
           lastPlayerTimeRef.current = data.currentTime;
+        }
+        
+        if (ytPlayerRef.current.pauseVideo) {
+          ytPlayerRef.current.pauseVideo();
         }
       }
     });
 
     socket.on('yt_sync_seek', (data) => {
       isIncomingSyncRef.current = true;
+      lastIncomingSyncTimeRef.current = Date.now();
       if (ytPlayerRef.current && ytPlayerRef.current.seekTo) {
         ytPlayerRef.current.seekTo(data.currentTime, true);
         lastPlayerTimeRef.current = data.currentTime;
       }
-    });
-
-    socket.on('partner_spotify_update', (data) => {
-      setPartnerSpotifyTrack(data);
     });
 
     // Clean up socket connection on component unmount
@@ -472,8 +479,16 @@ function Home() {
       const state = player.getPlayerState ? player.getPlayerState() : -1;
 
       if (state === 1) { // 1 = window.YT.PlayerState.PLAYING
+        // Skip check if we recently processed an incoming sync command (1.5s cooldown)
+        const elapsedSinceSync = Date.now() - lastIncomingSyncTimeRef.current;
+        if (elapsedSinceSync < 1500) {
+          lastPlayerTimeRef.current = currentTime;
+          return;
+        }
+
         const timeDiff = currentTime - lastPlayerTimeRef.current;
-        if (timeDiff < -0.5 || timeDiff > 3.5) {
+        // Expected delta is ~3s. Only trigger if difference is > 2s (i.e. delta < 1s or > 5s)
+        if (timeDiff < 1.0 || timeDiff > 5.0) {
           if (!isIncomingSyncRef.current) {
             if (socketRef.current) {
               socketRef.current.emit('yt_seek', { currentTime });
@@ -482,7 +497,7 @@ function Home() {
         }
       }
       lastPlayerTimeRef.current = currentTime;
-    }, 2000);
+    }, 3000);
   };
 
   const stopSeekCheck = () => {
@@ -557,6 +572,16 @@ function Home() {
   useEffect(() => {
     if (!currentVideoId) return;
 
+    // If player already exists, just load the video ID (preventing destroy & recreate)
+    if (ytPlayerRef.current && ytPlayerRef.current.loadVideoById) {
+      const currentUrl = ytPlayerRef.current.getVideoUrl ? ytPlayerRef.current.getVideoUrl() : '';
+      if (!currentUrl.includes(currentVideoId)) {
+        isIncomingSyncRef.current = true;
+        ytPlayerRef.current.loadVideoById(currentVideoId);
+      }
+      return;
+    }
+
     let playerInstance = null;
 
     const initPlayer = () => {
@@ -589,77 +614,18 @@ function Home() {
         initPlayer();
       };
     }
+  }, [currentVideoId]);
 
+  // Clean up player on unmount
+  useEffect(() => {
     return () => {
-      if (playerInstance && playerInstance.destroy) {
-        playerInstance.destroy();
+      if (ytPlayerRef.current && ytPlayerRef.current.destroy) {
+        ytPlayerRef.current.destroy();
         ytPlayerRef.current = null;
       }
       stopSeekCheck();
     };
-  }, [currentVideoId]);
-
-  // Spotify integration handlers and effects
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const spotifyStatus = params.get('spotify');
-    if (spotifyStatus === 'connected') {
-      setSpotifyNotification('Spotify connected successfully!');
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-      setTimeout(() => {
-        setSpotifyNotification('');
-      }, 4000);
-    } else if (spotifyStatus === 'error' || spotifyStatus === 'failed') {
-      setError('Failed to connect Spotify account.');
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    }
   }, []);
-
-  const fetchSpotifyStatus = async () => {
-    if (!token) return;
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/spotify/status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSpotifyConnected(data.spotifyConnected);
-      }
-    } catch (err) {
-      console.error('Error fetching Spotify status:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchSpotifyStatus();
-  }, [token]);
-
-  const handleSpotifyConnect = () => {
-    window.location.href = `${BACKEND_URL}/api/spotify/login?token=${token}`;
-  };
-
-  const handleSpotifyDisconnect = async () => {
-    if (!token) return;
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/spotify/disconnect`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        setSpotifyConnected(false);
-      } else {
-        setError('Failed to disconnect Spotify account.');
-      }
-    } catch (err) {
-      setError('Network error disconnecting Spotify.');
-    }
-  };
 
   const formatTime = (time) => {
     if (isNaN(time)) return '0:00';
@@ -693,31 +659,6 @@ function Home() {
           }}
         >
           Reconnecting...
-        </div>
-      )}
-      
-      {/* Spotify success banner */}
-      {spotifyNotification && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 1200,
-            backgroundColor: '#ECFDF5',
-            border: '1px solid #A7F3D0',
-            borderLeft: '4px solid #10B981',
-            color: '#065F46',
-            fontSize: '0.875rem',
-            fontWeight: '600',
-            padding: '12px 24px',
-            borderRadius: '6px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            animation: 'slideDown 0.3s ease-out'
-          }}
-        >
-          {spotifyNotification}
         </div>
       )}
 
@@ -780,24 +721,6 @@ function Home() {
           </div>
         </div>
 
-        {partnerOnline && partnerSpotifyTrack && partnerSpotifyTrack.isPlaying && (
-          <div style={{ 
-            marginTop: '-12px', 
-            marginBottom: '24px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            padding: '8px 12px',
-            backgroundColor: '#FAF9F7',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--border-color)',
-            width: 'fit-content'
-          }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Now playing: <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontStyle: 'italic' }}>{partnerSpotifyTrack.songName}</span> — <span style={{ fontStyle: 'italic' }}>{partnerSpotifyTrack.artistName}</span>
-            </span>
-          </div>
-        )}
 
         <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '8px' }}>
           You: <strong style={{ color: 'var(--text-primary)' }}>{myStatus}</strong>
@@ -842,39 +765,6 @@ function Home() {
           </button>
         </div>
 
-        {/* Spotify Connection Panel */}
-        <div style={{ 
-          marginTop: '32px', 
-          paddingTop: '20px', 
-          borderTop: '1px solid var(--border-color)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <div>
-            <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>Spotify Integration</p>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {spotifyConnected ? 'Spotify is connected' : 'Connect to show what you are playing'}
-            </p>
-          </div>
-          {spotifyConnected ? (
-            <button 
-              onClick={handleSpotifyDisconnect} 
-              className="btn" 
-              style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem', color: '#EF4444', borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }}
-            >
-              Disconnect
-            </button>
-          ) : (
-            <button 
-              onClick={handleSpotifyConnect} 
-              className="btn btn-primary" 
-              style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem' }}
-            >
-              Connect
-            </button>
-          )}
-        </div>
 
         <div style={{ display: 'flex', gap: '16px', marginTop: '36px', justifyContent: 'center' }}>
           <button 

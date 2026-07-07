@@ -33,8 +33,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const authRouter = require('./routes/auth');
 const pairRouter = require('./routes/pair');
 const songsRouter = require('./routes/songs');
-const spotifyRouter = require('./routes/spotify');
-const { getCurrentlyPlaying } = require('./utils/spotify');
 
 // Single test route
 app.get('/api/health', (req, res) => {
@@ -45,7 +43,6 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/pair', pairRouter);
 app.use('/api/songs', songsRouter);
-app.use('/api/spotify', spotifyRouter);
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -319,37 +316,6 @@ io.on('connection', async (socket) => {
     }
   });
 });
-
-// Poll Spotify status for online users every 15 seconds
-const lastSentSpotifyStatus = new Map(); // userId -> stringified track details
-
-setInterval(async () => {
-  for (const [userId, userInfo] of onlineUsers.entries()) {
-    try {
-      const user = await User.findById(userId);
-      if (!user || !user.spotifyConnected) continue;
-
-      const currentTrack = await getCurrentlyPlaying(user);
-      const partnerId = user.pairId ? user.pairId.toString() : null;
-
-      if (partnerId) {
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          const currentTrackStr = JSON.stringify(currentTrack);
-          const lastSent = lastSentSpotifyStatus.get(userId);
-
-          if (currentTrackStr !== lastSent) {
-            lastSentSpotifyStatus.set(userId, currentTrackStr);
-            io.to(partnerInfo.socketId).emit('partner_spotify_update', currentTrack);
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`Error polling Spotify for user ${userId}:`, err);
-    }
-  }
-}, 15000);
-
 // MongoDB connection
 const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/presence';
 mongoose.connect(mongoUri)
