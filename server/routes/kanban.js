@@ -21,7 +21,6 @@ function emitToPartner(req, event, data) {
   }
 }
 
-// GET /api/kanban/cards — return all cards for this pair, sorted by column+position
 router.get('/cards', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
@@ -33,7 +32,6 @@ router.get('/cards', auth, async (req, res) => {
   }
 });
 
-// POST /api/kanban/cards — create a new card
 router.post('/cards', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
@@ -42,7 +40,7 @@ router.post('/cards', auth, async (req, res) => {
     const { text, column = 'todo' } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'Text is required' });
 
-    // Position at end of that column
+    // us column ke end mein position assign kr rhe hai
     const maxCard = await KanbanCard.findOne({ pairId, column }).sort({ position: -1 });
     const position = maxCard ? maxCard.position + 1 : 0;
 
@@ -54,7 +52,6 @@ router.post('/cards', auth, async (req, res) => {
       createdBy: req.user._id
     });
     await card.save();
-
     emitToPartner(req, 'kanban_card_created', card);
     res.status(201).json(card);
   } catch (err) {
@@ -62,7 +59,6 @@ router.post('/cards', auth, async (req, res) => {
   }
 });
 
-// PATCH /api/kanban/cards/:id — move card to new column / reorder (bulk reorder support)
 router.patch('/cards/:id', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
@@ -75,7 +71,6 @@ router.patch('/cards/:id', auth, async (req, res) => {
     if (column !== undefined) card.column = column;
     if (position !== undefined) card.position = position;
     await card.save();
-
     emitToPartner(req, 'kanban_card_moved', card);
     res.json(card);
   } catch (err) {
@@ -83,7 +78,6 @@ router.patch('/cards/:id', auth, async (req, res) => {
   }
 });
 
-// PATCH /api/kanban/cards/:id/text — edit card text
 router.patch('/cards/:id/text', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
@@ -106,7 +100,6 @@ router.patch('/cards/:id/text', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/kanban/cards/:id — delete a card
 router.delete('/cards/:id', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);

@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import Pair from './pages/Pair';
 import Home from './pages/Home';
 
-// Route wrapper to ensure user is authenticated
+// sirf logged-in users ke liye route
 function ProtectedRoute({ children }) {
   const { token, loading } = useAuth();
 
@@ -25,7 +25,7 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// Route wrapper to prevent logged-in users from accessing landing/login
+// logged-in users ko login page pe jaane se rokna
 function PublicRoute({ children }) {
   const { token, loading } = useAuth();
 
@@ -50,14 +50,9 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public Landing & Login Route */}
           <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
-
-          {/* Protected Pairing & Dashboard Routes */}
           <Route path="/pair" element={<ProtectedRoute><Pair /></ProtectedRoute>} />
           <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-
-          {/* Redirect all other routes to root */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>

@@ -4,7 +4,6 @@ const Note = require('../models/Note');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 
-// POST /api/notes - Leave a note for partner
 router.post('/', auth, async (req, res) => {
   if (!req.user.pairId) {
     return res.status(400).json({ error: 'You must be paired to leave notes.' });
@@ -31,19 +30,13 @@ router.post('/', auth, async (req, res) => {
       triggerStatus,
       delivered: false
     });
-
     await note.save();
-
-    res.status(201).json({
-      message: 'Note left successfully!',
-      note
-    });
+    res.status(201).json({ message: 'Note left successfully!', note });
   } catch (error) {
     res.status(500).json({ error: 'Server error leaving note: ' + error.message });
   }
 });
 
-// GET /api/notes/pending - Retrieve undelivered notes triggered by user's current status
 router.get('/pending', auth, async (req, res) => {
   try {
     const partnerId = req.user.pairId;
@@ -69,9 +62,7 @@ router.get('/pending', auth, async (req, res) => {
     if (note) {
       note.delivered = true;
       await note.save();
-
       const partnerUser = await User.findById(partnerId);
-
       return res.json({
         id: note._id,
         message: note.message,

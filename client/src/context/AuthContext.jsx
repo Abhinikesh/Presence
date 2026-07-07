@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
           setUser(data);
           localStorage.setItem('user', JSON.stringify(data));
         } else {
-          // Clean up invalid or expired token
+          // agar token expire ho gaya to sab saaf kr rhe hai
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           setToken(null);

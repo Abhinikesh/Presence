@@ -15,11 +15,9 @@ function Home() {
   const navigate = useNavigate();
   const socketRef = useRef(null);
 
-  // Reaction ping state
   const [activePing, setActivePing] = useState(null);
   const [sentStatus, setSentStatus] = useState({ heart: false, wave: false, thinking: false });
 
-  // Music state
   const [songs, setSongs] = useState([]);
   const [isSongsLoading, setIsSongsLoading] = useState(true);
   const [currentSong, setCurrentSong] = useState(null);
@@ -29,29 +27,23 @@ function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
-  // Socket connection status
   const [isConnected, setIsConnected] = useState(true);
 
-  // Audio ref
   const audioRef = useRef(null);
 
-  // Watch Together state
   const [ytUrl, setYtUrl] = useState('');
   const [ytError, setYtError] = useState('');
   const [currentVideoId, setCurrentVideoId] = useState('');
 
-  // Geolocation Distance Sync states
   const [shareLocation, setShareLocation] = useState(false);
   const [distanceApart, setDistanceApart] = useState(null);
   const watchIdRef = useRef(null);
 
-  // Leave-behind note states
   const [noteMessage, setNoteMessage] = useState('');
   const [noteTriggerStatus, setNoteTriggerStatus] = useState('Free');
   const [activeNote, setActiveNote] = useState(null);
   const [noteFeedback, setNoteFeedback] = useState('');
 
-  // Study Room States
   const [durationMinutes, setDurationMinutes] = useState(25);
   const [remainingSeconds, setRemainingSeconds] = useState(25 * 60);
   const [timerActive, setTimerActive] = useState(false);
@@ -61,41 +53,34 @@ function Home() {
   const timerIntervalRef = useRef(null);
   const durationMinutesRef = useRef(25);
   
-  // Tic-Tac-Toe Game State
   const [gameState, setGameState] = useState(null);
 
-  // Games section tab (which game is showing)
-  const [selectedGame, setSelectedGame] = useState('tictactoe'); // 'tictactoe' | 'hangman'
+  const [selectedGame, setSelectedGame] = useState('tictactoe');
 
-  // Hangman State
-  const [hangmanState, setHangmanState] = useState(null);    // server state for this user's view
+  const [hangmanState, setHangmanState] = useState(null);
   const [hangmanWordInput, setHangmanWordInput] = useState('');
   const [hangmanError, setHangmanError] = useState('');
   const [hangmanScores, setHangmanScores] = useState({ me: 0, partner: 0 });
 
-  // Whiteboard States & Refs
   const [brushColor, setBrushColor] = useState('#1A1A1A');
   const [brushWidth, setBrushWidth] = useState(4);
   const [isDrawing, setIsDrawing] = useState(false);
   const canvasRef = useRef(null);
   const prevCoordsRef = useRef({ x: 0, y: 0 });
 
-  // Icebreaker states
   const [icebreakerPrompt, setIcebreakerPrompt] = useState(null);
   const [icebreakerChoice, setIcebreakerChoice] = useState(null);
   const [icebreakerStatus, setIcebreakerStatus] = useState('idle');
   const [icebreakerRevealData, setIcebreakerRevealData] = useState(null);
 
-  // Desire Meets Discretion states
-  const [desireStatus, setDesireStatus] = useState('idle');          // idle | playing | waiting | reveal
-  const [desirePrompt, setDesirePrompt] = useState(null);            // { question, optionA, optionB, category, matchCount, totalCount }
-  const [desireChoice, setDesireChoice] = useState(null);            // 'A' | 'B'
-  const [desireReveal, setDesireReveal] = useState(null);            // full reveal payload
-  const [desireCategory, setDesireCategory] = useState('all');       // 'all' | 'romance' | 'desires' | 'fantasy' | 'compatibility'
+  const [desireStatus, setDesireStatus] = useState('idle');
+  const [desirePrompt, setDesirePrompt] = useState(null);
+  const [desireChoice, setDesireChoice] = useState(null);
+  const [desireReveal, setDesireReveal] = useState(null);
+  const [desireCategory, setDesireCategory] = useState('all');
   const [desireMatchCount, setDesireMatchCount] = useState(0);
   const [desireTotalCount, setDesireTotalCount] = useState(0);
 
-  // Persistence State & Refs
   const [partnerId, setPartnerId] = useState('');
   const partnerIdRef = useRef('');
   useEffect(() => {
@@ -106,13 +91,11 @@ function Home() {
     durationMinutesRef.current = durationMinutes;
   }, [durationMinutes]);
 
-  // Kanban Board State
   const [kanbanCards, setKanbanCards] = useState({ todo: [], in_progress: [], done: [] });
   const [kanbanNewText, setKanbanNewText] = useState('');
   const [kanbanEditingId, setKanbanEditingId] = useState(null);
   const [kanbanEditText, setKanbanEditText] = useState('');
 
-  // Shared Notes State & Refs
   const [sharedNote, setSharedNote] = useState('');
   const [partnerIsTyping, setPartnerIsTyping] = useState(false);
   const [lastNoteUpdated, setLastNoteUpdated] = useState(null);
@@ -121,15 +104,12 @@ function Home() {
   const noteDebounceTimeoutRef = useRef(null);
   const partnerTypingIndicatorTimeoutRef = useRef(null);
 
-
-  // Watch Together refs
   const ytPlayerRef = useRef(null);
   const isIncomingSyncRef = useRef(false);
   const lastPlayerTimeRef = useRef(0);
   const seekCheckIntervalRef = useRef(null);
   const lastIncomingSyncTimeRef = useRef(0);
 
-  // Refs for tracking current values to avoid stale closures in Socket callbacks
   const songsRef = useRef([]);
   useEffect(() => {
     songsRef.current = songs;
@@ -162,7 +142,7 @@ function Home() {
   useEffect(() => {
     if (!token) return;
 
-    // Establish connection to Socket.IO server, passing token in handshake auth
+    // socket connection initialize kr rhe hai token ke sath
     const socket = io(BACKEND_URL, {
       auth: {
         token: token
@@ -171,7 +151,6 @@ function Home() {
 
     socketRef.current = socket;
 
-    // Track Socket.IO connection status
     socket.on('connect', () => {
       setIsConnected(true);
     });
@@ -185,7 +164,6 @@ function Home() {
       setIsConnected(false);
     });
 
-    // Listen for partner's initial status on connect
     socket.on('partner_status', (data) => {
       setPartnerOnline(data.online);
       if (data.online) {
@@ -193,23 +171,19 @@ function Home() {
       }
     });
 
-    // Listen for partner coming online
     socket.on('partner_online', (data) => {
       setPartnerOnline(true);
       setPartnerStatus(data?.status || 'Free');
     });
 
-    // Listen for partner going offline
     socket.on('partner_offline', () => {
       setPartnerOnline(false);
     });
 
-    // Listen for partner updating status
     socket.on('partner_status_update', (data) => {
       setPartnerStatus(data.status);
     });
 
-    // Music sync listeners
     socket.on('sync_play', (data) => {
       if (audioRef.current) {
         audioRef.current.currentTime = data.currentTime;
@@ -239,7 +213,6 @@ function Home() {
     socket.on('sync_change_song', async (data) => {
       let targetSong = songsRef.current.find(s => s._id === data.songId);
       
-      // If not in state yet, pull latest list (in case partner just uploaded)
       if (!targetSong) {
         try {
           const response = await fetch(`${BACKEND_URL}/api/songs`, {
@@ -268,7 +241,6 @@ function Home() {
       }
     });
 
-    // Listen for incoming pings
     socket.on('receive_ping', (data) => {
       setActivePing({
         id: Date.now(),
@@ -277,7 +249,6 @@ function Home() {
       });
     });
 
-    // YouTube sync listeners
     socket.on('yt_sync_change_video', (data) => {
       isIncomingSyncRef.current = true;
       setCurrentVideoId(data.videoId);
@@ -447,7 +418,6 @@ function Home() {
       setIcebreakerStatus('reveal');
     });
 
-    // Kanban live updates from partner
     socket.on('kanban_card_created', (card) => {
       setKanbanCards(prev => ({
         ...prev,
@@ -497,10 +467,8 @@ function Home() {
       }
     });
 
-    // Hangman live updates
     socket.on('hangman_state_update', (state) => {
       setHangmanState(state);
-      // Sync hangman score when game ends
       if (state.status === 'won' || state.status === 'lost') {
         fetchPairState(partnerIdRef.current);
       }
@@ -511,7 +479,6 @@ function Home() {
       setTimeout(() => setHangmanError(''), 3000);
     });
 
-    // Desire Meets Discretion listeners
     socket.on('desire_new_prompt', (data) => {
       setDesirePrompt(data);
       setDesireChoice(null);
@@ -532,7 +499,6 @@ function Home() {
       setDesireTotalCount(data.totalCount || 0);
     });
 
-    // Clean up socket connection on component unmount
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -629,7 +595,7 @@ function Home() {
       ctx.closePath();
     });
   };
-  // ── Kanban API helpers ──────────────────────────────────────
+
   const groupByColumn = (cards) => {
     const grouped = { todo: [], in_progress: [], done: [] };
     cards.forEach(card => {
@@ -679,7 +645,6 @@ function Home() {
   };
 
   const handleDeleteKanbanCard = async (card) => {
-    // Optimistic
     setKanbanCards(prev => ({
       ...prev,
       [card.column]: prev[card.column].filter(c => c._id !== card._id)
@@ -691,7 +656,6 @@ function Home() {
       });
     } catch (err) {
       console.error('Error deleting kanban card:', err);
-      // Revert on failure
       fetchKanbanCards();
     }
   };
@@ -700,7 +664,6 @@ function Home() {
     const newText = kanbanEditText.trim();
     setKanbanEditingId(null);
     if (!newText || newText === card.text) return;
-    // Optimistic
     setKanbanCards(prev => ({
       ...prev,
       [card.column]: prev[card.column].map(c => c._id === card._id ? { ...c, text: newText } : c)
@@ -731,21 +694,17 @@ function Home() {
     const dstList = srcCol === dstCol ? srcList : Array.from(allCards[dstCol]);
     dstList.splice(destination.index, 0, { ...moved, column: dstCol });
 
-    // Optimistic state update
     const newState = { ...allCards, [srcCol]: srcList, [dstCol]: dstList };
-    // Reassign positions within affected column(s)
     newState[dstCol] = newState[dstCol].map((c, i) => ({ ...c, position: i }));
     if (srcCol !== dstCol) newState[srcCol] = newState[srcCol].map((c, i) => ({ ...c, position: i }));
     setKanbanCards(newState);
 
-    // Persist: update moved card's column + position, then reorder siblings
     try {
       await fetch(`${BACKEND_URL}/api/kanban/cards/${draggableId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ column: dstCol, position: destination.index })
       });
-      // Update positions of all cards in affected columns
       const promises = [];
       newState[dstCol].forEach((c, i) => {
         if (c._id !== draggableId) {
@@ -772,7 +731,6 @@ function Home() {
     }
   };
 
-  // ─── Hangman Handlers ────────────────────────────────────────────────────
   const handleHangmanStart = () => {
     if (!socketRef.current) return;
     setHangmanError('');
@@ -800,7 +758,6 @@ function Home() {
     setHangmanWordInput('');
     socketRef.current.emit('hangman_new_round');
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
   const handleNoteChange = (e) => {
     const val = e.target.value;
@@ -836,7 +793,6 @@ function Home() {
       if (response.ok) {
         const data = await response.json();
 
-        // 1. Restore Whiteboard
         if (data.whiteboardData) {
           try {
             const strokes = JSON.parse(data.whiteboardData);
@@ -848,7 +804,6 @@ function Home() {
           }
         }
 
-        // 2. Restore Scores
         if (data.ticTacToeScore) {
           const { user1Wins, user2Wins, draws } = data.ticTacToeScore;
           const myId = String(user._id);
@@ -859,7 +814,6 @@ function Home() {
           }
         }
 
-        // 3. Restore Timer
         if (data.studyTimer) {
           const { isRunning, remainingSeconds: savedRemaining, durationMinutes: savedDuration } = data.studyTimer;
           setDurationMinutes(savedDuration);
@@ -894,12 +848,10 @@ function Home() {
           }
         }
 
-        // 4. Restore Shared Notes
         if (data.sharedNote !== undefined) {
           setSharedNote(data.sharedNote || '');
         }
 
-        // 5. Restore Hangman Scores
         if (data.hangmanScore) {
           const myId = String(user._id);
           const pId = partnerIdRef.current;
@@ -936,7 +888,7 @@ function Home() {
             fetchPairState(data.partner.id);
             fetchKanbanCards();
           } else {
-            // If not paired, redirect to pair page
+            // paired nahi hai to connect code page pr bhejenge
             navigate('/pair');
           }
         } else {
@@ -957,7 +909,6 @@ function Home() {
     }
   };
 
-  // Auto dismiss ping notification
   useEffect(() => {
     if (!activePing) return;
     const timer = setTimeout(() => {
@@ -992,7 +943,6 @@ function Home() {
       });
 
       if (response.ok) {
-        // Clear pairing state in local context
         if (user) {
           setUser({ ...user, pairId: null });
         }
@@ -1011,7 +961,6 @@ function Home() {
     navigate('/');
   };
 
-  // Music handlers
   const handleSelectSong = (song) => {
     setCurrentSong(song);
     setIsPlaying(true);
@@ -1104,7 +1053,7 @@ function Home() {
 
       if (response.ok) {
         await fetchSongs();
-        e.target.value = null; // Reset input
+        e.target.value = null;
       } else {
         setUploadError(data.error || 'Upload failed.');
       }
@@ -1115,7 +1064,6 @@ function Home() {
     }
   };
 
-  // Synced YouTube Watching logic
   const extractYoutubeVideoId = (url) => {
     if (!url) return null;
     const cleanUrl = url.trim();
@@ -1146,8 +1094,7 @@ function Home() {
       const currentTime = player.getCurrentTime();
       const state = player.getPlayerState ? player.getPlayerState() : -1;
 
-      if (state === 1) { // 1 = window.YT.PlayerState.PLAYING
-        // Skip check if we recently processed an incoming sync command (1.5s cooldown)
+      if (state === 1) {
         const elapsedSinceSync = Date.now() - lastIncomingSyncTimeRef.current;
         if (elapsedSinceSync < 1500) {
           lastPlayerTimeRef.current = currentTime;
@@ -1155,7 +1102,6 @@ function Home() {
         }
 
         const timeDiff = currentTime - lastPlayerTimeRef.current;
-        // Expected delta is ~3s. Only trigger if difference is > 2s (i.e. delta < 1s or > 5s)
         if (timeDiff < 1.0 || timeDiff > 5.0) {
           if (!isIncomingSyncRef.current) {
             if (socketRef.current) {
@@ -1176,7 +1122,6 @@ function Home() {
   };
 
   const onPlayerReady = () => {
-    // Player loaded and ready
   };
 
   const onPlayerStateChange = (event) => {
@@ -1196,12 +1141,12 @@ function Home() {
       return;
     }
 
-    if (state === 1) { // PLAYING
+    if (state === 1) {
       if (socketRef.current) {
         socketRef.current.emit('yt_play', { currentTime });
       }
       startSeekCheck();
-    } else if (state === 2) { // PAUSED
+    } else if (state === 2) {
       if (socketRef.current) {
         socketRef.current.emit('yt_pause', { currentTime });
       }
@@ -1226,7 +1171,6 @@ function Home() {
     }
   };
 
-  // Dynamically load YouTube IFrame API script once on mount
   useEffect(() => {
     if (!window.YT) {
       const tag = document.createElement('script');
@@ -1236,11 +1180,9 @@ function Home() {
     }
   }, []);
 
-  // Initialize and clean up player instance when currentVideoId changes
   useEffect(() => {
     if (!currentVideoId) return;
 
-    // If player already exists, just load the video ID (preventing destroy & recreate)
     if (ytPlayerRef.current && ytPlayerRef.current.loadVideoById) {
       const currentUrl = ytPlayerRef.current.getVideoUrl ? ytPlayerRef.current.getVideoUrl() : '';
       if (!currentUrl.includes(currentVideoId)) {
@@ -1284,7 +1226,6 @@ function Home() {
     }
   }, [currentVideoId]);
 
-  // Clean up player on unmount
   useEffect(() => {
     return () => {
       if (ytPlayerRef.current && ytPlayerRef.current.destroy) {
@@ -1295,7 +1236,6 @@ function Home() {
     };
   }, []);
 
-  // Geolocation Distance Sync handlers and effects
   const handleToggleLocation = () => {
     if (shareLocation) {
       if (watchIdRef.current) {
@@ -1354,7 +1294,6 @@ function Home() {
     };
   }, []);
 
-  // Study Room Timer Handlers
   const handleTimerStart = (duration = durationMinutes) => {
     const totalSeconds = duration * 60;
     setRemainingSeconds(totalSeconds);
@@ -1408,7 +1347,6 @@ function Home() {
     }
   };
 
-  // Shared Task List Handlers
   const handleAddTask = async (e) => {
     e.preventDefault();
     if (!newTaskText.trim()) return;
@@ -1480,7 +1418,6 @@ function Home() {
     };
   }, []);
 
-  // Tic-Tac-Toe Game Handlers
   const handleStartGame = () => {
     if (socketRef.current) {
       socketRef.current.emit('game_start_tictactoe');
@@ -1503,7 +1440,6 @@ function Home() {
     }
   };
 
-  // Whiteboard Canvas handlers
   const drawLine = (x1, y1, x2, y2, color, lineWidth, emit = true) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1592,7 +1528,6 @@ function Home() {
     }
   };
 
-  // Icebreaker click handlers
   const handleStartIcebreaker = () => {
     if (socketRef.current) {
       socketRef.current.emit('icebreaker_start');
@@ -1612,7 +1547,6 @@ function Home() {
     }
   };
 
-  // ─── Desire Meets Discretion handlers ────────────────────────────────────
   const handleDesireStart = (cat = desireCategory) => {
     if (!socketRef.current) return;
     socketRef.current.emit('desire_start', { category: cat });
@@ -1634,7 +1568,6 @@ function Home() {
     if (!socketRef.current) return;
     socketRef.current.emit('desire_change_category', { category: cat });
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
   const formatTime = (time) => {
     if (isNaN(time)) return '0:00';
@@ -1647,7 +1580,6 @@ function Home() {
     return <div style={{ textAlign: 'center', marginTop: '40px' }}>Loading...</div>;
   }
 
-  // Tilt card handlers — max 5° rotation, driven via CSS custom properties
   const handleTiltMove = (e) => {
     const card = e.currentTarget;
     const rect = card.getBoundingClientRect();
@@ -1671,10 +1603,8 @@ function Home() {
 
   return (
     <div className="home-wrapper">
-      {/* Grain texture overlay for premium tactile depth */}
       <div className="bg-grain" />
 
-      {/* Background Blobs — 5-layer depth system */}
       <div className="bg-blobs-premium">
         <div className="blob-coral" />
         <div className="blob-purple" />
@@ -1683,7 +1613,6 @@ function Home() {
         <div className="blob-rose" />
       </div>
 
-      {/* Leave-behind Note Modal Overlay */}
       {activeNote && (
         <div style={{
           position: 'fixed',
@@ -1751,7 +1680,6 @@ function Home() {
         </div>
       )}
 
-      {/* Reconnecting banner */}
       {!isConnected && (
         <div
           style={{
@@ -1773,7 +1701,6 @@ function Home() {
         </div>
       )}
 
-      {/* Sliding notification banner */}
       {activePing && (
         <div
           onClick={handleDismissPing}
@@ -1808,7 +1735,6 @@ function Home() {
         </div>
       )}
 
-      {/* Hidden native audio element */}
       <audio
         ref={audioRef}
         onLoadedMetadata={handleLoadedMetadata}
@@ -1816,7 +1742,6 @@ function Home() {
         onEnded={handleEnded}
       />
 
-      {/* Sticky Top Navigation Bar */}
       <nav className="home-nav">
         <div className="home-nav-container">
           <div className="nav-logo">
@@ -1834,10 +1759,8 @@ function Home() {
         </div>
       </nav>
 
-      {/* Main Content Container */}
       <div className="home-content-container">
         
-        {/* HeroGreeting / Summary strip */}
         <div className="home-hero-strip">
           <h1 className="hero-greeting">
             Hey {user.name.split(' ')[0] || user.name}, <span className="partner-name">{partnerName || 'your partner'}</span> is {partnerOnline ? partnerStatus || 'Free' : 'Offline'} 🌙
@@ -1853,9 +1776,7 @@ function Home() {
           </div>
         </div>
 
-        {/* Quick Actions Zone */}
         <div className="quick-actions-strip">
-          {/* Left Panel: Status Selectors */}
           <div className="quick-actions-panel" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Your Status</h3>
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
@@ -1932,7 +1853,6 @@ function Home() {
             </div>
           </div>
 
-          {/* Right Panel: Send Signal / Leave Note */}
           <div className="quick-actions-panel" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Interact</h3>
             
@@ -2004,13 +1924,10 @@ function Home() {
           </div>
         </div>
 
-        {/* Feature Grid */}
         <div className="dashboard-grid">
-          {/* Study Room Card */}
           <div className="feature-card card-accent-study" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Study Room <span style={{ fontSize: '0.75rem', color: '#4A90E2', fontWeight: 'bold', textTransform: 'uppercase' }}>Focus Zone</span></h2>
             
-            {/* Pomodoro Timer display */}
             <div style={{ 
               textAlign: 'center', 
               margin: '16px 0', 
@@ -2019,7 +1936,6 @@ function Home() {
               border: '1px solid var(--border-color)',
               padding: '20px 16px'
             }}>
-              {/* Preset Buttons */}
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '16px' }}>
                 {[15, 25, 45, 60].map((mins) => (
                   <button
@@ -2041,7 +1957,6 @@ function Home() {
                 ))}
               </div>
 
-              {/* Large timer numbers */}
               <div style={{ 
                 fontSize: '3rem', 
                 fontWeight: '700', 
@@ -2053,7 +1968,6 @@ function Home() {
                 {formatTime(remainingSeconds)}
               </div>
 
-              {/* Start / Pause / Reset controls */}
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '16px' }}>
                 {!timerActive ? (
                   <button 
@@ -2081,7 +1995,6 @@ function Home() {
                 </button>
               </div>
 
-              {/* Focus completion message */}
               {focusCompletionMsg && (
                 <div style={{ 
                   color: '#065F46', 
@@ -2094,7 +2007,6 @@ function Home() {
               )}
             </div>
 
-            {/* Shared Task List */}
             <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
               <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
                 Shared Task List
@@ -2114,7 +2026,6 @@ function Home() {
                 </button>
               </form>
 
-              {/* Tasks checklist */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
                 {tasks.length === 0 ? (
                   <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', textAlign: 'center', fontStyle: 'italic', padding: '12px 0' }}>
@@ -2171,11 +2082,9 @@ function Home() {
             </div>
           </div>
 
-          {/* Games Card */}
           <div className="feature-card card-accent-games" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Games <span style={{ fontSize: '0.75rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase' }}>Play Time</span></h2>
 
-            {/* ── Game Tab Bar ── */}
             <div className="game-tab-bar">
               <button
                 className={`game-tab-btn${selectedGame === 'tictactoe' ? ' active' : ''}`}
@@ -2191,10 +2100,8 @@ function Home() {
               </button>
             </div>
 
-            {/* ══════════ TIC-TAC-TOE ══════════ */}
             {selectedGame === 'tictactoe' && (
               <div>
-                {/* Scoreboard */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2309,7 +2216,6 @@ function Home() {
               </div>
             )}
 
-            {/* ══════════ HANGMAN ══════════ */}
             {selectedGame === 'hangman' && (() => {
               const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'.split('');
               const hs = hangmanState;
@@ -2319,7 +2225,6 @@ function Home() {
 
               return (
                 <div>
-                  {/* Hangman Score bar */}
                   <div className="hangman-score-bar">
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ color: '#7C3AED', fontSize: '1.1rem', fontWeight: '800' }}>{hangmanScores.me}</div>
@@ -2332,7 +2237,6 @@ function Home() {
                     </div>
                   </div>
 
-                  {/* Error toast */}
                   {hangmanError && (
                     <div style={{
                       padding: '8px 12px',
@@ -2348,7 +2252,6 @@ function Home() {
                     </div>
                   )}
 
-                  {/* No game yet */}
                   {!hs ? (
                     <div style={{ textAlign: 'center', padding: '20px 0' }}>
                       <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
@@ -2360,7 +2263,6 @@ function Home() {
                     </div>
                   ) : (
                     <div>
-                      {/* Status banner */}
                       {hs.status === 'waiting_for_word' && (
                         <div className={`hangman-status-banner playing`}>
                           {isPicker ? '🤫 You are the word picker — enter a secret word below.' : `⏳ Waiting for ${partnerName || 'your partner'} to set the word…`}
@@ -2382,7 +2284,6 @@ function Home() {
                         </div>
                       )}
 
-                      {/* Word display (blanks/revealed) */}
                       {hs.status !== 'waiting_for_word' && (
                         <div className="hangman-word-display">
                           {hs.revealed.map((ch, i) => (
@@ -2396,7 +2297,6 @@ function Home() {
                         </div>
                       )}
 
-                      {/* Wrong guess counter */}
                       {hs.status === 'playing' && (
                         <div className="hangman-wrong-counter">
                           Wrong guesses: <span>{hs.wrongGuesses}</span> / {hs.maxWrong}
@@ -2409,7 +2309,6 @@ function Home() {
                         </div>
                       )}
 
-                      {/* Picker: word input form */}
                       {isPicker && hs.status === 'waiting_for_word' && (
                         <form onSubmit={handleHangmanSetWord} style={{ marginTop: '8px' }}>
                           <input
@@ -2433,7 +2332,6 @@ function Home() {
                         </form>
                       )}
 
-                      {/* Guesser: alphabet grid */}
                       {isGuesser && hs.status === 'playing' && (
                         <div className="hangman-alpha-grid">
                           {ALPHABET.map(letter => {
@@ -2454,7 +2352,6 @@ function Home() {
                         </div>
                       )}
 
-                      {/* New Round button when game is over */}
                       {isOver && (
                         <button
                           onClick={handleHangmanNewRound}
@@ -2472,7 +2369,6 @@ function Home() {
 
           </div>
 
-          {/* Icebreakers Card */}
           <div className="feature-card card-accent-icebreakers" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Icebreakers <span style={{ fontSize: '0.75rem', color: '#EC4899', fontWeight: 'bold', textTransform: 'uppercase' }}>Would You Rather</span></h2>
             
@@ -2492,7 +2388,6 @@ function Home() {
                 </div>
               ) : (
                 <div>
-                  {/* Question Banner */}
                   <div style={{ marginBottom: '12px', textAlign: 'center' }}>
                     <span style={{ 
                       fontSize: '0.75rem', 
@@ -2505,7 +2400,6 @@ function Home() {
                     </span>
                   </div>
 
-                  {/* Option Choice Panels */}
                   {icebreakerStatus === 'playing' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <button
@@ -2558,10 +2452,8 @@ function Home() {
                     </div>
                   )}
 
-                  {/* Waiting Panel */}
                   {icebreakerStatus === 'waiting' && (
                     <div style={{ padding: '8px 0', textAlign: 'center' }}>
-                      {/* Show my choice highlighted */}
                       <div style={{
                         padding: '10px 14px',
                         backgroundColor: '#FDF1EE',
@@ -2590,10 +2482,8 @@ function Home() {
                     </div>
                   )}
 
-                  {/* Reveal Panel */}
                   {icebreakerStatus === 'reveal' && icebreakerRevealData && (
                     <div>
-                      {/* Matched/Mismatched Header */}
                       <div style={{
                         textAlign: 'center',
                         padding: '8px 12px',
@@ -2617,7 +2507,6 @@ function Home() {
                           : "You picked differently!"}
                       </div>
 
-                      {/* Choice Lists */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
                         {Object.entries(icebreakerRevealData.choices).map(([uid, choice]) => {
                           const name = icebreakerRevealData.names[uid] || 'Someone';
@@ -2651,7 +2540,6 @@ function Home() {
                         })}
                       </div>
 
-                      {/* Next Prompt Control */}
                       <button 
                         onClick={handleNextIcebreaker} 
                         className="btn btn-primary"
@@ -2666,7 +2554,6 @@ function Home() {
             </div>
           </div>
 
-          {/* ═══ Desire Meets Discretion Card ═══ */}
           <div className="feature-card card-accent-desire" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2 style={{ marginBottom: '4px' }}>
               💋 Desire Meets Discretion{' '}
@@ -2678,7 +2565,6 @@ function Home() {
               Answer privately. Reveal together. Discover how you align.
             </p>
 
-            {/* Category tab bar */}
             <div className="desire-category-bar">
               {[
                 { id: 'all', label: '🎲 All' },
@@ -2698,7 +2584,6 @@ function Home() {
               ))}
             </div>
 
-            {/* Compatibility score bar — shown once at least 1 question answered */}
             {desireTotalCount > 0 && (
               <div className="desire-score-bar">
                 <div>
@@ -2714,7 +2599,6 @@ function Home() {
               </div>
             )}
 
-            {/* ── IDLE: Start prompt ── */}
             {desireStatus === 'idle' && (
               <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
                 <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🌹</div>
@@ -2732,10 +2616,8 @@ function Home() {
               </div>
             )}
 
-            {/* ── PLAYING: Show question + options ── */}
             {(desireStatus === 'playing' || desireStatus === 'waiting') && desirePrompt && (
               <div>
-                {/* Question */}
                 <div className="desire-question-card">
                   <div className="desire-category-pill">
                     {desirePrompt.category === 'romance' ? '💕 Romance'
@@ -2747,7 +2629,6 @@ function Home() {
                   <div className="desire-question-text">{desirePrompt.question}</div>
                 </div>
 
-                {/* Playing: show choice buttons */}
                 {desireStatus === 'playing' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <button
@@ -2768,7 +2649,6 @@ function Home() {
                   </div>
                 )}
 
-                {/* Waiting: show my locked choice + waiting */}
                 {desireStatus === 'waiting' && (
                   <div>
                     <div className="desire-reveal-row is-me" style={{ marginBottom: '10px' }}>
@@ -2783,10 +2663,8 @@ function Home() {
               </div>
             )}
 
-            {/* ── REVEAL ── */}
             {desireStatus === 'reveal' && desireReveal && desirePrompt && (
               <div>
-                {/* Question recap */}
                 <div className="desire-question-card" style={{ marginBottom: '12px' }}>
                   <div className="desire-category-pill">
                     {desireReveal.currentPrompt?.category === 'romance' ? '💕 Romance'
@@ -2798,14 +2676,12 @@ function Home() {
                   <div className="desire-question-text">{desireReveal.currentPrompt?.question || desirePrompt.question}</div>
                 </div>
 
-                {/* Match/Different banner */}
                 <div className={`desire-reveal-match${desireReveal.isMatch ? ' match' : ' different'}`}>
                   {desireReveal.isMatch
                     ? '💕 You both feel the same way!'
                     : '✨ Opposites attract — you chose differently!'}
                 </div>
 
-                {/* Per-user answer rows */}
                 {Object.entries(desireReveal.choices).map(([uid, choice]) => {
                   const isMe = uid === user._id;
                   const name = desireReveal.names[uid] || (isMe ? 'You' : partnerName || 'Partner');
@@ -2819,7 +2695,6 @@ function Home() {
                   );
                 })}
 
-                {/* Next question */}
                 <button
                   className="btn btn-primary"
                   style={{ width: '100%', marginTop: '14px', background: 'linear-gradient(135deg, #BE185D, #9D174D)', border: 'none' }}
@@ -2831,11 +2706,9 @@ function Home() {
             )}
           </div>
 
-          {/* Whiteboard Card */}
           <div className="feature-card card-accent-whiteboard" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Whiteboard <span style={{ fontSize: '0.75rem', color: '#2ECC71', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Canvas</span></h2>
             
-            {/* Controls: Brush Presets & Width */}
             <div style={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
@@ -2844,7 +2717,6 @@ function Home() {
               marginBottom: '16px',
               flexWrap: 'wrap'
             }}>
-              {/* Preset Colors */}
               <div style={{ display: 'flex', gap: '6px' }}>
                 {['#1A1A1A', '#E8623F', '#4A90E2', '#2ECC71', '#F1C40F', '#9B59B6'].map((color) => (
                   <button
@@ -2865,7 +2737,6 @@ function Home() {
                 ))}
               </div>
 
-              {/* Size Preset controls */}
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Size:</span>
                 {[
@@ -2893,7 +2764,6 @@ function Home() {
               </div>
             </div>
 
-            {/* Canvas container */}
             <div style={{ 
               position: 'relative', 
               width: '100%', 
@@ -2924,7 +2794,6 @@ function Home() {
               />
             </div>
 
-            {/* Clear Button */}
             <button
               onClick={handleClearCanvas}
               className="btn"
@@ -2942,11 +2811,9 @@ function Home() {
             </button>
           </div>
 
-          {/* Music Card */}
           <div className="feature-card card-accent-music" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></h2>
             
-            {/* Upload Form */}
             <div className="form-group mt-2">
               <label className="form-label">Upload Song (MP3/WAV, max 15MB)</label>
               {isUploading ? (
@@ -2963,7 +2830,6 @@ function Home() {
               {uploadError && <div style={{ color: '#EF4444', fontSize: '0.8125rem', marginTop: '4px' }}>{uploadError}</div>}
             </div>
 
-            {/* Songs List */}
             <div style={{ marginTop: '16px' }}>
               <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Shared Songs</h3>
               {isSongsLoading ? (
@@ -3019,7 +2885,6 @@ function Home() {
               )}
             </div>
 
-            {/* Custom Audio Controller Panel */}
             {currentSong && (
               <div style={{
                 marginTop: '16px',
@@ -3062,11 +2927,9 @@ function Home() {
             )}
           </div>
 
-          {/* Watch Together Card */}
           <div className="feature-card card-accent-watch" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Watch Together <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 'bold', textTransform: 'uppercase' }}>Sync Video</span></h2>
             
-            {/* URL Input Form */}
             <form onSubmit={handleLoadYtVideo} style={{ marginTop: '12px' }}>
               <div className="form-group">
                 <label className="form-label">YouTube Link or Video ID</label>
@@ -3091,7 +2954,6 @@ function Home() {
               </div>
             </form>
 
-            {/* Player Container */}
             {currentVideoId ? (
               <div className="youtube-container" style={{ marginTop: '16px' }}>
                 <div id="youtube-player"></div>
@@ -3111,7 +2973,6 @@ function Home() {
             )}
           </div>
 
-          {/* Kanban Board Card */}
           <div className="feature-card card-accent-kanban" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave} style={{ gridColumn: '1 / -1' }}>
             <h2>Kanban Board <span style={{ fontSize: '0.75rem', color: '#14B8A6', fontWeight: 'bold', textTransform: 'uppercase' }}>Shared Tasks</span></h2>
 
@@ -3199,7 +3060,6 @@ function Home() {
             </DragDropContext>
           </div>
 
-          {/* Shared Notes Card */}
           <div
             className="feature-card card-accent-notes"
             onMouseMove={handleTiltMove}

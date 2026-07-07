@@ -11,6 +11,7 @@ function Pair() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // user already paired hai to direct home page pr bhejenge
     if (user && user.pairId) {
       navigate('/home');
     }
@@ -66,14 +67,12 @@ function Pair() {
   return (
     <div style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', backgroundColor: '#FAF9F7' }}>
 
-      {/* Animated background blobs */}
       <div className="bg-blobs-premium">
         <div className="blob-purple" style={{ top: '-5%', right: '-5%', bottom: 'auto', left: 'auto' }} />
         <div className="blob-coral" style={{ bottom: '-10%', left: '5%', top: 'auto' }} />
         <div className="blob-yellow" style={{ top: '30%', left: '30%' }} />
       </div>
 
-      {/* Main centred content */}
       <div style={{
         position: 'relative', zIndex: 2,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -81,7 +80,6 @@ function Pair() {
         padding: '40px 24px'
       }}>
 
-        {/* Back link */}
         <div style={{ width: '100%', maxWidth: '460px', marginBottom: '28px' }}>
           <a href="/" style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -95,9 +93,7 @@ function Pair() {
           </a>
         </div>
 
-        {/* Header illustration + title */}
         <div style={{ textAlign: 'center', marginBottom: '36px', maxWidth: '460px', width: '100%' }}>
-          {/* Animated SVG link */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '22px' }}>
             <svg width="130" height="58" viewBox="0 0 130 58" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="24" cy="29" r="20" fill="url(#pNodeL)" className="float-shape-1" />
@@ -143,14 +139,12 @@ function Pair() {
           </p>
         </div>
 
-        {/* ── YOUR CODE CARD ── */}
         <div style={{
           width: '100%', maxWidth: '460px', marginBottom: '16px',
           background: '#FFFFFF', border: '1px solid var(--border-color)',
           borderRadius: '16px', boxShadow: '0 4px 24px rgba(26,26,26,0.06)',
           padding: '28px 28px 24px', position: 'relative', overflow: 'hidden'
         }}>
-          {/* Top gradient strip */}
           <div style={{
             position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
             background: 'linear-gradient(90deg, #E8623F 0%, #EC4899 50%, #8B5CF6 100%)'
@@ -178,7 +172,6 @@ function Pair() {
             </div>
           </div>
 
-          {/* Code characters */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'linear-gradient(135deg, #FAF9F7 0%, #FDF1EE 100%)',
@@ -226,21 +219,18 @@ function Pair() {
           </button>
         </div>
 
-        {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', maxWidth: '460px', margin: '8px 0 16px' }}>
           <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }} />
           <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#B0AEA8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>or enter theirs</span>
           <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }} />
         </div>
 
-        {/* ── CONNECT CARD ── */}
         <div style={{
           width: '100%', maxWidth: '460px',
           background: '#FFFFFF', border: '1px solid var(--border-color)',
           borderRadius: '16px', boxShadow: '0 4px 24px rgba(26,26,26,0.06)',
           padding: '28px 28px 24px', position: 'relative', overflow: 'hidden'
         }}>
-          {/* Top gradient strip reversed */}
           <div style={{
             position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
             background: 'linear-gradient(90deg, #8B5CF6 0%, #EC4899 50%, #E8623F 100%)'
@@ -327,4 +317,3 @@ function Pair() {
 }
 
 export default Pair;
-

@@ -11,8 +11,9 @@ const PairState = require('./models/PairState');
 const { cloudinary } = require('./utils/cloudinary');
 require('dotenv').config();
 
+// Haversine formula se do locations ke beech distance calculate kr rhe hai (km mein)
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Radius of the earth in km
+  const R = 6371;
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a =
@@ -20,8 +21,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d;
+  return R * c;
 }
 
 function deg2rad(deg) {
@@ -107,18 +107,18 @@ const whiteboardStrokes = new Map();
 const whiteboardDebounceTimers = new Map();
 const sharedNotesBuffer = new Map();
 const sharedNotesDebounceTimers = new Map();
-const hangmanGames = new Map(); // gameKey → hangman game state
+const hangmanGames = new Map();
 
-// ─── Hangman helpers ─────────────────────────────────────────────────────────
+// ─── Hangman game ke liye helper functions ────────────────────────────────────
 function makeHangmanGame(pickerUserId, guesserUserId) {
   return {
     pickerUserId,
     guesserUserId,
-    word: null,          // set by picker
-    guessedLetters: [],  // letters already tried
+    word: null,
+    guessedLetters: [],
     wrongGuesses: 0,
     maxWrong: 6,
-    status: 'waiting_for_word', // 'waiting_for_word' | 'playing' | 'won' | 'lost'
+    status: 'waiting_for_word',
     winner: null
   };
 }
@@ -138,7 +138,6 @@ function buildHangmanStateForUser(game, userId) {
     maxWrong: game.maxWrong,
     status: game.status,
     winner: game.winner,
-    // picker sees the actual word so they can verify
     actualWord: isPicker && game.word ? game.word : null
   };
 }
@@ -157,7 +156,6 @@ async function updateHangmanScore(gameKey, winnerUserId) {
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
-
 
 async function updateTicTacToeScore(gameKey, winnerUserId, isDraw) {
   try {
@@ -184,6 +182,7 @@ async function updateTicTacToeScore(gameKey, winnerUserId, isDraw) {
   }
 }
 
+// Whiteboard strokes ko debounce ke saath DB mein save kr rhe hai
 async function saveWhiteboardStroke(gameKey, stroke) {
   try {
     if (!whiteboardStrokes.has(gameKey)) {
@@ -285,15 +284,9 @@ async function saveTimerState(gameKey, timerData) {
         updatedAt: Date.now()
       };
     } else {
-      if (timerData.isRunning !== undefined) {
-        updateFields['studyTimer.isRunning'] = timerData.isRunning;
-      }
-      if (timerData.remainingSeconds !== undefined) {
-        updateFields['studyTimer.remainingSeconds'] = timerData.remainingSeconds;
-      }
-      if (timerData.durationMinutes !== undefined) {
-        updateFields['studyTimer.durationMinutes'] = timerData.durationMinutes;
-      }
+      if (timerData.isRunning !== undefined) updateFields['studyTimer.isRunning'] = timerData.isRunning;
+      if (timerData.remainingSeconds !== undefined) updateFields['studyTimer.remainingSeconds'] = timerData.remainingSeconds;
+      if (timerData.durationMinutes !== undefined) updateFields['studyTimer.durationMinutes'] = timerData.durationMinutes;
       updateFields.updatedAt = Date.now();
     }
 
@@ -313,15 +306,10 @@ const port = process.env.PORT || 5000;
 const path = require('path');
 const fs = require('fs');
 
-// Middleware
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5175';
-app.use(cors({
-  origin: clientUrl,
-  credentials: true
-}));
+app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json());
 
-// Import Routes
 const authRouter = require('./routes/auth');
 const pairRouter = require('./routes/pair');
 const songsRouter = require('./routes/songs');
@@ -331,12 +319,10 @@ const tasksRouter = require('./routes/tasks');
 const pairStateRouter = require('./routes/pairState');
 const kanbanRouter = require('./routes/kanban');
 
-// Single test route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Route Middlewares
 app.use('/api/auth', authRouter);
 app.use('/api/pair', pairRouter);
 app.use('/api/songs', songsRouter);
@@ -346,10 +332,9 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/pair-state', pairStateRouter);
 app.use('/api/kanban', kanbanRouter);
 
-// Create HTTP server
 const server = http.createServer(app);
 
-// Initialize Socket.IO
+// Socket.IO setup with CORS
 const io = new Server(server, {
   cors: {
     origin: clientUrl,
@@ -358,49 +343,40 @@ const io = new Server(server, {
 });
 app.set('io', io);
 
-// In-memory mapping of online users: userId -> { socketId, status }
+// online users ko memory mein track kr rhe hai
 const onlineUsers = new Map();
 app.set('onlineUsers', onlineUsers);
 
-// In-memory mapping of Tic-Tac-Toe games: gameKey -> gameInfo
 const tictactoeGames = new Map();
-
-// In-memory mapping of Icebreaker games: gameKey -> gameInfo
 const icebreakerGames = new Map();
 
-// ─── Desire Meets Discretion ─────────────────────────────────────────────────
+// ─── Desire Meets Discretion prompts ─────────────────────────────────────────
 const DESIRE_PROMPTS = [
-  // 💕 Romance
   { category: 'romance', question: 'Your idea of the most romantic surprise is…', optionA: 'A handwritten love letter left for you to find', optionB: 'Being taken on an unplanned midnight adventure' },
   { category: 'romance', question: 'The moment you feel most in love is…', optionA: 'When they remember the tiny details you once mentioned', optionB: 'When they hold your hand without saying a word' },
   { category: 'romance', question: 'Your perfect romantic evening looks like…', optionA: 'Cooking together with music playing softly', optionB: 'Stargazing on a blanket with takeout and candles' },
   { category: 'romance', question: 'The most meaningful way to say "I love you" is…', optionA: 'Whispering it quietly in a tender moment', optionB: 'Showing it through a planned, thoughtful gesture' },
   { category: 'romance', question: 'You fall harder for someone who…', optionA: 'Makes you laugh until your stomach hurts', optionB: 'Makes you feel completely seen and understood' },
   { category: 'romance', question: 'Your favourite kind of date is…', optionA: 'Slow mornings with coffee and nowhere to be', optionB: 'A spontaneous night that turns into a story you tell for years' },
-  // 🌹 Desires
   { category: 'desires', question: 'Your heart races most when your partner…', optionA: 'Unexpectedly pulls you close and whispers your name', optionB: 'Looks at you across a room like you\'re the only one there' },
   { category: 'desires', question: 'The thing you secretly crave most in a relationship is…', optionA: 'Complete vulnerability — being fully known and still chosen', optionB: 'A quiet, burning tension that makes every moment electric' },
   { category: 'desires', question: 'You feel most desired when…', optionA: 'They choose you again and again, even when they don\'t have to', optionB: 'They can\'t keep their eyes off you in a crowded room' },
   { category: 'desires', question: 'What you want most at the end of a hard day is…', optionA: 'To be held in silence by the person you love', optionB: 'To have them distract you completely from the world' },
   { category: 'desires', question: 'The kind of love you secretly crave most is…', optionA: 'Soft, steady and certain — like coming home', optionB: 'Intense, consuming and electric — like lightning in a storm' },
   { category: 'desires', question: 'The thought that makes you blush most is…', optionA: 'Being completely known — every flaw, every fear — and still adored', optionB: 'Being wanted so badly that they can\'t even hide it' },
-  // 🎭 Fantasy
   { category: 'fantasy', question: 'In your romantic fantasy, you and your partner are…', optionA: 'Strangers who meet on a train in a foreign city', optionB: 'Childhood friends who finally realise they were always in love' },
   { category: 'fantasy', question: 'Your dream romantic escape is…', optionA: 'A secret cabin in the mountains, completely snowed in', optionB: 'A spontaneous flight to a city neither of you has been to' },
   { category: 'fantasy', question: 'You imagine the most passionate kiss happening…', optionA: 'In the rain, after a long, aching separation', optionB: 'Slow and deliberate, with nowhere else to be' },
   { category: 'fantasy', question: 'The role you play in your love fantasy…', optionA: 'The mysterious one who sweeps them off their feet', optionB: 'The devoted lover who knows every corner of their soul' },
   { category: 'fantasy', question: 'The romantic scene you\'d replay forever is…', optionA: 'Lying in bed talking until 4am about everything and nothing', optionB: 'That first moment when you both knew — and neither said it yet' },
-  // 💑 Compatibility
   { category: 'compatibility', question: 'In a relationship, you are more…', optionA: 'The initiator — grand gestures, first to say "I love you"', optionB: 'The sustainer — steady presence, the one they always return to' },
   { category: 'compatibility', question: 'When things get difficult, you tend to…', optionA: 'Talk it through immediately — words help you process', optionB: 'Take space to think clearly, then return when you\'re ready' },
   { category: 'compatibility', question: 'Your love language leans more toward…', optionA: 'Physical touch and quality time', optionB: 'Words of affirmation and acts of service' },
   { category: 'compatibility', question: 'When you imagine your future together, you see…', optionA: 'A quiet life — a home, routines, deep familiarity', optionB: 'An adventurous life — always something new, always evolving' },
   { category: 'compatibility', question: 'The relationship dynamic that feels most natural is…', optionA: 'Being their safe harbour — constant and calm', optionB: 'Being their spark — exciting and ever-inspiring' },
   { category: 'compatibility', question: 'When you say "I need you", you mean…', optionA: 'You\'re my person — I can\'t imagine life without you', optionB: 'Right now, in this moment, please just be here with me' },
-  // Mixed
   { category: 'romance', question: 'The most romantic thing your partner could do tomorrow is…', optionA: 'Leave a note somewhere only you would find it', optionB: 'Cancel everything and spend the whole day with just you' },
   { category: 'fantasy', question: 'The scenario that makes your heart race most is…', optionA: 'Being found and chosen by someone who adores you', optionB: 'Running away together from everything and everyone else' },
-  // 🔥 Spicy
   { category: 'spicy', question: 'You prefer the vibe in bed to be…', optionA: 'Slow, sensual and deeply intimate — savour every second', optionB: 'Raw, intense and completely unrestrained — no holding back' },
   { category: 'spicy', question: 'When it comes to initiating, you are…', optionA: 'The one who makes the first move — you love the chase', optionB: 'The one who loves being chased and pulled in' },
   { category: 'spicy', question: 'The kind of dirty talk you\'re into is…', optionA: 'Whispered, intimate, close to the ear — soft and filthy', optionB: 'Bold and explicit — hearing exactly what they want to do to you' },
@@ -432,19 +408,17 @@ function getDesirePromptIndex(recentList, category) {
   return available[Math.floor(Math.random() * available.length)];
 }
 
-const lovegameGames = new Map(); // gameKey -> { category, currentPrompt, recentPrompts[], answers{}, matchCount, totalCount }
+const lovegameGames = new Map();
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Socket.IO authentication middleware
+// Socket.IO auth middleware — token verify kr rhe hai
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) {
     return next(new Error('Authentication error: Token missing'));
   }
-
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Attach userId (using id field from payload) to socket object
     socket.userId = decoded.id || decoded.userId;
     next();
   } catch (err) {
@@ -452,47 +426,35 @@ io.use((socket, next) => {
   }
 });
 
-// Socket.IO connection event
+// Jab bhi koi user connect hota hai
 io.on('connection', async (socket) => {
   const userId = socket.userId;
-  // Default status is "Free" on connection
   onlineUsers.set(userId, { socketId: socket.id, status: 'Free' });
   console.log(`User connected: ${userId} (Socket: ${socket.id})`);
 
   try {
-    // Look up the user's pairId (partner's ID)
     const user = await User.findById(userId);
     if (user && user.pairId) {
       const partnerId = user.pairId.toString();
       const partnerInfo = onlineUsers.get(partnerId);
       const partnerOnline = !!partnerInfo;
 
-      // 1. Emit partner's status immediately to the current user
-      if (partnerOnline) {
-        socket.emit('partner_status', { online: true, status: partnerInfo.status });
-      } else {
-        socket.emit('partner_status', { online: false });
-      }
+      socket.emit('partner_status', { online: partnerOnline, status: partnerOnline ? partnerInfo.status : undefined });
 
-      // 2. If partner is online, notify them that this user connected with status "Free"
       if (partnerOnline) {
         io.to(partnerInfo.socketId).emit('partner_online', { status: 'Free' });
       }
     } else {
-      // User is not paired yet
       socket.emit('partner_status', { online: false });
     }
   } catch (err) {
     console.error(`Error handling socket connection for user ${userId}:`, err);
   }
 
-  // Handle status updates
   socket.on('update_status', async (data) => {
     const { status } = data;
     const validStatuses = ['Studying', 'Sleeping', 'Free', 'Listening'];
-    if (!validStatuses.includes(status)) {
-      return;
-    }
+    if (!validStatuses.includes(status)) return;
 
     const userInfo = onlineUsers.get(userId);
     if (userInfo) {
@@ -511,7 +473,7 @@ io.on('connection', async (socket) => {
           io.to(partnerInfo.socketId).emit('partner_status_update', { status });
         }
 
-        // Check if there's a pending note left by the partner for this status
+        // agar partner ne koi note chhoda hai is status ke liye to deliver kr rhe hai
         const pendingNote = await Note.findOne({
           fromUserId: user.pairId,
           triggerStatus: status,
@@ -524,19 +486,9 @@ io.on('connection', async (socket) => {
             fromName = partnerInfo.name;
           } else {
             const partnerUser = await User.findById(user.pairId);
-            if (partnerUser) {
-              fromName = partnerUser.name;
-            }
+            if (partnerUser) fromName = partnerUser.name;
           }
-
-          // Emit "note_delivered" to the current user's socket
-          socket.emit('note_delivered', {
-            id: pendingNote._id,
-            message: pendingNote.message,
-            fromName
-          });
-
-          // Mark note as delivered
+          socket.emit('note_delivered', { id: pendingNote._id, message: pendingNote.message, fromName });
           pendingNote.delivered = true;
           await pendingNote.save();
         }
@@ -546,17 +498,13 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Music sync events
   socket.on('play_song', async (data) => {
     const { songId, currentTime } = data;
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('sync_play', { songId, currentTime });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('sync_play', { songId, currentTime });
       }
     } catch (err) {
       console.error(`Error syncing play for user ${userId}:`, err);
@@ -568,11 +516,8 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('sync_pause', { currentTime });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('sync_pause', { currentTime });
       }
     } catch (err) {
       console.error(`Error syncing pause for user ${userId}:`, err);
@@ -584,11 +529,8 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('sync_seek', { currentTime });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('sync_seek', { currentTime });
       }
     } catch (err) {
       console.error(`Error syncing seek for user ${userId}:`, err);
@@ -600,11 +542,8 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('sync_change_song', { songId });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('sync_change_song', { songId });
       }
     } catch (err) {
       console.error(`Error syncing change_song for user ${userId}:`, err);
@@ -615,17 +554,12 @@ io.on('connection', async (socket) => {
     const { type } = data;
     const validTypes = ['heart', 'wave', 'thinking'];
     if (!validTypes.includes(type)) return;
-
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
         if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('receive_ping', {
-            type,
-            fromName: user.name
-          });
+          io.to(partnerInfo.socketId).emit('receive_ping', { type, fromName: user.name });
         }
       }
     } catch (err) {
@@ -633,17 +567,13 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Synced YouTube watching events
   socket.on('yt_change_video', async (data) => {
     const { videoId } = data;
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('yt_sync_change_video', { videoId });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('yt_sync_change_video', { videoId });
       }
     } catch (err) {
       console.error(`Error syncing yt_change_video for user ${userId}:`, err);
@@ -655,11 +585,8 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('yt_sync_play', { currentTime });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('yt_sync_play', { currentTime });
       }
     } catch (err) {
       console.error(`Error syncing yt_play for user ${userId}:`, err);
@@ -671,11 +598,8 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('yt_sync_pause', { currentTime });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('yt_sync_pause', { currentTime });
       }
     } catch (err) {
       console.error(`Error syncing yt_pause for user ${userId}:`, err);
@@ -687,11 +611,8 @@ io.on('connection', async (socket) => {
     try {
       const user = await User.findById(userId);
       if (user && user.pairId) {
-        const partnerId = user.pairId.toString();
-        const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('yt_sync_seek', { currentTime });
-        }
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('yt_sync_seek', { currentTime });
       }
     } catch (err) {
       console.error(`Error syncing yt_seek for user ${userId}:`, err);
@@ -716,20 +637,15 @@ io.on('connection', async (socket) => {
 
         if (userInfo.location && partnerInfo && partnerInfo.location) {
           const d = calculateDistance(
-            userInfo.location.latitude,
-            userInfo.location.longitude,
-            partnerInfo.location.latitude,
-            partnerInfo.location.longitude
+            userInfo.location.latitude, userInfo.location.longitude,
+            partnerInfo.location.latitude, partnerInfo.location.longitude
           );
           const distanceKm = d < 10 ? Math.round(d * 10) / 10 : Math.round(d);
-
           io.to(userInfo.socketId).emit('distance_update', { distanceKm });
           io.to(partnerInfo.socketId).emit('distance_update', { distanceKm });
         } else {
           io.to(userInfo.socketId).emit('distance_update', { distanceKm: null });
-          if (partnerInfo) {
-            io.to(partnerInfo.socketId).emit('distance_update', { distanceKm: null });
-          }
+          if (partnerInfo) io.to(partnerInfo.socketId).emit('distance_update', { distanceKm: null });
         }
       }
     } catch (err) {
@@ -742,9 +658,7 @@ io.on('connection', async (socket) => {
       const user = await User.findById(userId);
       if (user && user.pairId) {
         const partnerInfo = onlineUsers.get(user.pairId.toString());
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('timer_sync_start', data);
-        }
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('timer_sync_start', data);
         const gameKey = getGameKey(userId, user.pairId.toString());
         await saveTimerState(gameKey, {
           isRunning: true,
@@ -762,14 +676,9 @@ io.on('connection', async (socket) => {
       const user = await User.findById(userId);
       if (user && user.pairId) {
         const partnerInfo = onlineUsers.get(user.pairId.toString());
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('timer_sync_pause', data);
-        }
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('timer_sync_pause', data);
         const gameKey = getGameKey(userId, user.pairId.toString());
-        await saveTimerState(gameKey, {
-          isRunning: false,
-          remainingSeconds: data.remainingSeconds
-        });
+        await saveTimerState(gameKey, { isRunning: false, remainingSeconds: data.remainingSeconds });
       }
     } catch (err) {
       console.error(`Error relaying timer_pause for user ${userId}:`, err);
@@ -781,14 +690,9 @@ io.on('connection', async (socket) => {
       const user = await User.findById(userId);
       if (user && user.pairId) {
         const partnerInfo = onlineUsers.get(user.pairId.toString());
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('timer_sync_reset');
-        }
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('timer_sync_reset');
         const gameKey = getGameKey(userId, user.pairId.toString());
-        await saveTimerState(gameKey, {
-          isRunning: false,
-          reset: true
-        });
+        await saveTimerState(gameKey, { isRunning: false, reset: true });
       }
     } catch (err) {
       console.error(`Error relaying timer_reset for user ${userId}:`, err);
@@ -804,11 +708,7 @@ io.on('connection', async (socket) => {
       const gameKey = getGameKey(userId, partnerId);
 
       const symbols = Math.random() < 0.5 ? ['X', 'O'] : ['O', 'X'];
-      const playerSymbols = {
-        [userId]: symbols[0],
-        [partnerId]: symbols[1]
-      };
-
+      const playerSymbols = { [userId]: symbols[0], [partnerId]: symbols[1] };
       const turnUserId = Math.random() < 0.5 ? userId : partnerId;
 
       const game = {
@@ -823,13 +723,8 @@ io.on('connection', async (socket) => {
 
       const userInfo = onlineUsers.get(userId);
       const partnerInfo = onlineUsers.get(partnerId);
-
-      if (userInfo) {
-        io.to(userInfo.socketId).emit('game_state_update', game);
-      }
-      if (partnerInfo) {
-        io.to(partnerInfo.socketId).emit('game_state_update', game);
-      }
+      if (userInfo) io.to(userInfo.socketId).emit('game_state_update', game);
+      if (partnerInfo) io.to(partnerInfo.socketId).emit('game_state_update', game);
     } catch (err) {
       console.error('Error starting game:', err);
     }
@@ -843,10 +738,9 @@ io.on('connection', async (socket) => {
 
       const partnerId = user.pairId.toString();
       const gameKey = getGameKey(userId, partnerId);
-
       const game = tictactoeGames.get(gameKey);
-      if (!game || game.status !== 'playing') return;
 
+      if (!game || game.status !== 'playing') return;
       if (game.turnUserId !== userId) return;
       if (cellIndex < 0 || cellIndex > 8 || game.board[cellIndex] !== null) return;
 
@@ -869,13 +763,8 @@ io.on('connection', async (socket) => {
 
       const userInfo = onlineUsers.get(userId);
       const partnerInfo = onlineUsers.get(partnerId);
-
-      if (userInfo) {
-        io.to(userInfo.socketId).emit('game_state_update', game);
-      }
-      if (partnerInfo) {
-        io.to(partnerInfo.socketId).emit('game_state_update', game);
-      }
+      if (userInfo) io.to(userInfo.socketId).emit('game_state_update', game);
+      if (partnerInfo) io.to(partnerInfo.socketId).emit('game_state_update', game);
     } catch (err) {
       console.error('Error making move:', err);
     }
@@ -890,32 +779,16 @@ io.on('connection', async (socket) => {
       const gameKey = getGameKey(userId, partnerId);
 
       const symbols = Math.random() < 0.5 ? ['X', 'O'] : ['O', 'X'];
-      const playerSymbols = {
-        [userId]: symbols[0],
-        [partnerId]: symbols[1]
-      };
-
+      const playerSymbols = { [userId]: symbols[0], [partnerId]: symbols[1] };
       const turnUserId = Math.random() < 0.5 ? userId : partnerId;
 
-      const game = {
-        board: Array(9).fill(null),
-        turnUserId,
-        playerSymbols,
-        status: 'playing',
-        winnerUserId: null
-      };
-
+      const game = { board: Array(9).fill(null), turnUserId, playerSymbols, status: 'playing', winnerUserId: null };
       tictactoeGames.set(gameKey, game);
 
       const userInfo = onlineUsers.get(userId);
       const partnerInfo = onlineUsers.get(partnerId);
-
-      if (userInfo) {
-        io.to(userInfo.socketId).emit('game_state_update', game);
-      }
-      if (partnerInfo) {
-        io.to(partnerInfo.socketId).emit('game_state_update', game);
-      }
+      if (userInfo) io.to(userInfo.socketId).emit('game_state_update', game);
+      if (partnerInfo) io.to(partnerInfo.socketId).emit('game_state_update', game);
     } catch (err) {
       console.error('Error resetting game:', err);
     }
@@ -927,9 +800,7 @@ io.on('connection', async (socket) => {
       if (user && user.pairId) {
         const partnerId = user.pairId.toString();
         const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('canvas_sync_draw', data);
-        }
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('canvas_sync_draw', data);
         const gameKey = getGameKey(userId, partnerId);
         await saveWhiteboardStroke(gameKey, data);
       }
@@ -944,9 +815,7 @@ io.on('connection', async (socket) => {
       if (user && user.pairId) {
         const partnerId = user.pairId.toString();
         const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('canvas_sync_clear');
-        }
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('canvas_sync_clear');
         const gameKey = getGameKey(userId, partnerId);
         await clearWhiteboardState(gameKey);
       }
@@ -961,9 +830,7 @@ io.on('connection', async (socket) => {
       if (user && user.pairId) {
         const partnerId = user.pairId.toString();
         const partnerInfo = onlineUsers.get(partnerId);
-        if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('note_sync_update', data);
-        }
+        if (partnerInfo) io.to(partnerInfo.socketId).emit('note_sync_update', data);
         const gameKey = getGameKey(userId, partnerId);
         await saveSharedNote(gameKey, data.content);
       }
@@ -972,7 +839,7 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // ─── Hangman Socket Events ───────────────────────────────────────────────
+  // ─── Hangman socket events ────────────────────────────────────────────────
 
   socket.on('hangman_start', async () => {
     try {
@@ -982,7 +849,6 @@ io.on('connection', async (socket) => {
       const gameKey = getGameKey(userId, partnerId);
       const userInfo = onlineUsers.get(userId);
       const partnerInfo = onlineUsers.get(partnerId);
-      // First caller becomes picker, partner becomes guesser
       const game = makeHangmanGame(userId, partnerId);
       hangmanGames.set(gameKey, game);
       if (userInfo) io.to(userInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, userId));
@@ -1036,19 +902,16 @@ io.on('connection', async (socket) => {
       if (game.guessedLetters.includes(ch)) return socket.emit('hangman_error', { message: 'Letter already guessed.' });
 
       game.guessedLetters.push(ch);
-      if (!game.word.includes(ch)) {
-        game.wrongGuesses += 1;
-      }
+      if (!game.word.includes(ch)) game.wrongGuesses += 1;
 
-      // Check win: all letters revealed
       const allRevealed = game.word.split('').every(c => game.guessedLetters.includes(c));
       if (allRevealed) {
         game.status = 'won';
-        game.winner = userId; // guesser wins
+        game.winner = userId;
         await updateHangmanScore(gameKey, userId);
       } else if (game.wrongGuesses >= game.maxWrong) {
         game.status = 'lost';
-        game.winner = game.pickerUserId; // picker wins
+        game.winner = game.pickerUserId;
         await updateHangmanScore(gameKey, game.pickerUserId);
       }
 
@@ -1070,7 +933,7 @@ io.on('connection', async (socket) => {
       const partnerId = user.pairId.toString();
       const gameKey = getGameKey(userId, partnerId);
       const prev = hangmanGames.get(gameKey);
-      // Swap roles
+      // roles swap kr rhe hai naye round mein
       const newPicker = prev ? prev.guesserUserId : userId;
       const newGuesser = prev ? prev.pickerUserId : partnerId;
       const game = makeHangmanGame(newPicker, newGuesser);
@@ -1092,9 +955,7 @@ io.on('connection', async (socket) => {
       const partnerId = user.pairId.toString();
       const gameKey = getGameKey(userId, partnerId);
       const game = hangmanGames.get(gameKey);
-      if (game) {
-        socket.emit('hangman_state_update', buildHangmanStateForUser(game, userId));
-      }
+      if (game) socket.emit('hangman_state_update', buildHangmanStateForUser(game, userId));
     } catch (err) {
       console.error('hangman_get_state error:', err);
     }
@@ -1112,28 +973,16 @@ io.on('connection', async (socket) => {
 
       let game = icebreakerGames.get(gameKey) || { recentPrompts: [], answers: {}, currentPrompt: null };
       const promptIdx = getNewPromptIndex(game.recentPrompts);
-
       game.recentPrompts.push(promptIdx);
-      if (game.recentPrompts.length > 5) {
-        game.recentPrompts.shift();
-      }
+      if (game.recentPrompts.length > 5) game.recentPrompts.shift();
 
-      game.currentPrompt = {
-        ...ICEBREAKER_PROMPTS[promptIdx],
-        index: promptIdx
-      };
+      game.currentPrompt = { ...ICEBREAKER_PROMPTS[promptIdx], index: promptIdx };
       game.answers = {};
-
       icebreakerGames.set(gameKey, game);
 
       const userInfo = onlineUsers.get(userId);
       const partnerInfo = onlineUsers.get(partnerId);
-
-      const emitPayload = {
-        optionA: game.currentPrompt.optionA,
-        optionB: game.currentPrompt.optionB
-      };
-
+      const emitPayload = { optionA: game.currentPrompt.optionA, optionB: game.currentPrompt.optionB };
       if (userInfo) io.to(userInfo.socketId).emit('icebreaker_new_prompt', emitPayload);
       if (partnerInfo) io.to(partnerInfo.socketId).emit('icebreaker_new_prompt', emitPayload);
     } catch (err) {
@@ -1151,43 +1000,28 @@ io.on('connection', async (socket) => {
 
       const partnerId = user.pairId.toString();
       const gameKey = getGameKey(userId, partnerId);
-
       const game = icebreakerGames.get(gameKey);
       if (!game || !game.currentPrompt) return;
 
-      // Ignore additional answers from user who already answered this round
       if (game.answers[userId]) return;
-
       game.answers[userId] = choice;
       icebreakerGames.set(gameKey, game);
 
-      const hasUserAnswered = game.answers[userId] !== undefined;
       const hasPartnerAnswered = game.answers[partnerId] !== undefined;
-
       const userInfo = onlineUsers.get(userId);
       const partnerInfo = onlineUsers.get(partnerId);
 
-      if (hasUserAnswered && hasPartnerAnswered) {
+      if (hasPartnerAnswered) {
         const partnerUser = await User.findById(partnerId);
         const currentUser = await User.findById(userId);
-
         const revealPayload = {
-          choices: {
-            [userId]: game.answers[userId],
-            [partnerId]: game.answers[partnerId]
-          },
-          names: {
-            [userId]: currentUser ? currentUser.name : 'You',
-            [partnerId]: partnerUser ? partnerUser.name : 'Partner'
-          }
+          choices: { [userId]: game.answers[userId], [partnerId]: game.answers[partnerId] },
+          names: { [userId]: currentUser ? currentUser.name : 'You', [partnerId]: partnerUser ? partnerUser.name : 'Partner' }
         };
-
         if (userInfo) io.to(userInfo.socketId).emit('icebreaker_reveal', revealPayload);
         if (partnerInfo) io.to(partnerInfo.socketId).emit('icebreaker_reveal', revealPayload);
       } else {
-        if (userInfo) {
-          io.to(userInfo.socketId).emit('icebreaker_waiting');
-        }
+        if (userInfo) io.to(userInfo.socketId).emit('icebreaker_waiting');
       }
     } catch (err) {
       console.error('Error recording icebreaker answer:', err);
@@ -1204,28 +1038,16 @@ io.on('connection', async (socket) => {
 
       let game = icebreakerGames.get(gameKey) || { recentPrompts: [], answers: {}, currentPrompt: null };
       const promptIdx = getNewPromptIndex(game.recentPrompts);
-
       game.recentPrompts.push(promptIdx);
-      if (game.recentPrompts.length > 5) {
-        game.recentPrompts.shift();
-      }
+      if (game.recentPrompts.length > 5) game.recentPrompts.shift();
 
-      game.currentPrompt = {
-        ...ICEBREAKER_PROMPTS[promptIdx],
-        index: promptIdx
-      };
+      game.currentPrompt = { ...ICEBREAKER_PROMPTS[promptIdx], index: promptIdx };
       game.answers = {};
-
       icebreakerGames.set(gameKey, game);
 
       const userInfo = onlineUsers.get(userId);
       const partnerInfo = onlineUsers.get(partnerId);
-
-      const emitPayload = {
-        optionA: game.currentPrompt.optionA,
-        optionB: game.currentPrompt.optionB
-      };
-
+      const emitPayload = { optionA: game.currentPrompt.optionA, optionB: game.currentPrompt.optionB };
       if (userInfo) io.to(userInfo.socketId).emit('icebreaker_new_prompt', emitPayload);
       if (partnerInfo) io.to(partnerInfo.socketId).emit('icebreaker_new_prompt', emitPayload);
     } catch (err) {
@@ -1233,7 +1055,7 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // ─── Desire Meets Discretion Socket Events ───────────────────────────────
+  // ─── Desire Meets Discretion socket events ────────────────────────────────
 
   function emitDesirePrompt(gameKey, game, userInfo, partnerInfo) {
     const payload = {
@@ -1281,7 +1103,7 @@ io.on('connection', async (socket) => {
       const gameKey = getGameKey(userId, partnerId);
       const game = lovegameGames.get(gameKey);
       if (!game || !game.currentPrompt) return;
-      if (game.answers[userId]) return; // already answered
+      if (game.answers[userId]) return;
 
       game.answers[userId] = choice;
       lovegameGames.set(gameKey, game);
@@ -1290,7 +1112,6 @@ io.on('connection', async (socket) => {
       const partnerInfo = onlineUsers.get(partnerId);
 
       if (game.answers[userId] && game.answers[partnerId]) {
-        // Both answered — build reveal
         const partnerUser = await User.findById(partnerId);
         const currentUser = await User.findById(userId);
         const isMatch = game.answers[userId] === game.answers[partnerId];
@@ -1309,7 +1130,6 @@ io.on('connection', async (socket) => {
         if (userInfo) io.to(userInfo.socketId).emit('desire_reveal', revealPayload);
         if (partnerInfo) io.to(partnerInfo.socketId).emit('desire_reveal', revealPayload);
       } else {
-        // Only one answered — send waiting event to the person who just answered
         if (userInfo) io.to(userInfo.socketId).emit('desire_waiting');
       }
     } catch (err) {
@@ -1366,8 +1186,7 @@ io.on('connection', async (socket) => {
 
   socket.on('disconnect', async () => {
     console.log(`User disconnected: ${userId} (Socket: ${socket.id})`);
-    
-    // Only remove from onlineUsers if this socket is the active one mapped
+
     const userInfo = onlineUsers.get(userId);
     if (userInfo && userInfo.socketId === socket.id) {
       onlineUsers.delete(userId);
@@ -1377,20 +1196,15 @@ io.on('connection', async (socket) => {
       const user = await User.findById(userId);
       if (user && user.pairId) {
         const partnerId = user.pairId.toString();
-        
-        // Notify partner that current user is offline
         const partnerInfo = onlineUsers.get(partnerId);
         if (partnerInfo) {
           io.to(partnerInfo.socketId).emit('partner_offline');
         }
 
-        // If partner is also offline, clean up uploaded videos from Cloudinary and DB
+        // agar dono offline hain to Cloudinary se videos bhi delete kr rhe hai
         const isPartnerOnline = onlineUsers.has(partnerId);
         if (!isPartnerOnline) {
-          const videos = await Video.find({
-            pairId: { $in: [user._id, user.pairId] }
-          });
-
+          const videos = await Video.find({ pairId: { $in: [user._id, user.pairId] } });
           for (const video of videos) {
             if (video.publicId) {
               try {
@@ -1400,10 +1214,7 @@ io.on('connection', async (socket) => {
               }
             }
           }
-
-          await Video.deleteMany({
-            pairId: { $in: [user._id, user.pairId] }
-          });
+          await Video.deleteMany({ pairId: { $in: [user._id, user.pairId] } });
           console.log(`Cleaned up videos for pair ${user.pairId} because both users disconnected`);
         }
       }
@@ -1412,7 +1223,8 @@ io.on('connection', async (socket) => {
     }
   });
 });
-// MongoDB connection
+
+// MongoDB se connect kr rhe hai
 const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/presence';
 mongoose.connect(mongoUri)
   .then(() => {
@@ -1423,7 +1235,6 @@ mongoose.connect(mongoUri)
     console.log('Server will continue running, but MongoDB features will not work.');
   });
 
-// Start the server
 server.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

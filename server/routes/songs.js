@@ -8,12 +8,10 @@ const auth = require('../middleware/auth');
 
 const { musicStorage } = require('../utils/cloudinary');
 
-// Multer file filter config
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/x-pn-wav'];
   const ext = path.extname(file.originalname).toLowerCase();
   const allowedExtensions = ['.mp3', '.wav'];
-
   if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
@@ -24,19 +22,14 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: musicStorage,
   fileFilter: fileFilter,
-  limits: {
-    fileSize: 15 * 1024 * 1024 // 15MB
-  }
+  limits: { fileSize: 15 * 1024 * 1024 }
 });
 
-// POST /api/songs/upload - Upload a song
 router.post('/upload', auth, (req, res) => {
-  // Check if user is paired
   if (!req.user.pairId) {
     return res.status(400).json({ error: 'You must be paired to upload songs.' });
   }
 
-  // Handle multer upload
   upload.single('song')(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -53,7 +46,6 @@ router.post('/upload', auth, (req, res) => {
 
     try {
       const title = req.body.title || req.file.originalname;
-
       const song = new Song({
         title: title,
         fileUrl: req.file.path,
@@ -61,32 +53,23 @@ router.post('/upload', auth, (req, res) => {
         uploadedBy: req.user._id,
         pairId: req.user.pairId
       });
-
       await song.save();
-
-      res.status(201).json({
-        message: 'Song uploaded successfully!',
-        song
-      });
+      res.status(201).json({ message: 'Song uploaded successfully!', song });
     } catch (dbErr) {
       res.status(500).json({ error: 'Database error saving song: ' + dbErr.message });
     }
   });
 });
 
-// GET /api/songs - Fetch all shared songs in the pair
 router.get('/', auth, async (req, res) => {
   try {
     const partnerId = req.user.pairId;
     if (!partnerId) {
       return res.json([]);
     }
-
-    // Return songs where pairId is either this user or their partner
     const songs = await Song.find({
       pairId: { $in: [req.user._id, partnerId] }
     }).sort({ createdAt: -1 });
-
     res.json(songs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve songs: ' + error.message });
