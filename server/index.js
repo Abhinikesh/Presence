@@ -105,6 +105,59 @@ function checkWinner(board) {
 
 const whiteboardStrokes = new Map();
 const whiteboardDebounceTimers = new Map();
+const sharedNotesBuffer = new Map();
+const sharedNotesDebounceTimers = new Map();
+const hangmanGames = new Map(); // gameKey → hangman game state
+
+// ─── Hangman helpers ─────────────────────────────────────────────────────────
+function makeHangmanGame(pickerUserId, guesserUserId) {
+  return {
+    pickerUserId,
+    guesserUserId,
+    word: null,          // set by picker
+    guessedLetters: [],  // letters already tried
+    wrongGuesses: 0,
+    maxWrong: 6,
+    status: 'waiting_for_word', // 'waiting_for_word' | 'playing' | 'won' | 'lost'
+    winner: null
+  };
+}
+
+function buildHangmanStateForUser(game, userId) {
+  const isPicker = game.pickerUserId === userId;
+  const revealed = game.word
+    ? game.word.split('').map(ch => game.guessedLetters.includes(ch) ? ch : '_')
+    : [];
+
+  return {
+    role: isPicker ? 'picker' : 'guesser',
+    wordLength: game.word ? game.word.length : null,
+    revealed,
+    guessedLetters: game.guessedLetters,
+    wrongGuesses: game.wrongGuesses,
+    maxWrong: game.maxWrong,
+    status: game.status,
+    winner: game.winner,
+    // picker sees the actual word so they can verify
+    actualWord: isPicker && game.word ? game.word : null
+  };
+}
+
+async function updateHangmanScore(gameKey, winnerUserId) {
+  try {
+    const [u1, u2] = gameKey.split('-');
+    const field = winnerUserId === u1 ? 'hangmanScore.user1Wins' : 'hangmanScore.user2Wins';
+    await PairState.findOneAndUpdate(
+      { pairId: gameKey },
+      { $inc: { [field]: 1 }, updatedAt: Date.now() },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.error('Error updating hangman score:', err);
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 async function updateTicTacToeScore(gameKey, winnerUserId, isDraw) {
   try {
@@ -192,6 +245,34 @@ async function clearWhiteboardState(gameKey) {
   }
 }
 
+async function saveSharedNote(pairId, content) {
+  try {
+    sharedNotesBuffer.set(pairId, content);
+
+    if (sharedNotesDebounceTimers.has(pairId)) {
+      clearTimeout(sharedNotesDebounceTimers.get(pairId));
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const text = sharedNotesBuffer.get(pairId);
+        await PairState.findOneAndUpdate(
+          { pairId },
+          { sharedNote: text, updatedAt: Date.now() },
+          { new: true, upsert: true }
+        );
+        sharedNotesDebounceTimers.delete(pairId);
+      } catch (err) {
+        console.error('Error saving sharedNote in debounce:', err);
+      }
+    }, 1000);
+
+    sharedNotesDebounceTimers.set(pairId, timer);
+  } catch (err) {
+    console.error('Error in saveSharedNote:', err);
+  }
+}
+
 async function saveTimerState(gameKey, timerData) {
   try {
     let updateFields = {};
@@ -248,6 +329,7 @@ const videosRouter = require('./routes/videos');
 const notesRouter = require('./routes/notes');
 const tasksRouter = require('./routes/tasks');
 const pairStateRouter = require('./routes/pairState');
+const kanbanRouter = require('./routes/kanban');
 
 // Single test route
 app.get('/api/health', (req, res) => {
@@ -262,6 +344,7 @@ app.use('/api/videos', videosRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/pair-state', pairStateRouter);
+app.use('/api/kanban', kanbanRouter);
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -804,6 +887,153 @@ io.on('connection', async (socket) => {
       console.error(`Error relaying canvas_clear for user ${userId}:`, err);
     }
   });
+
+  socket.on('note_update', async (data) => {
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerId = user.pairId.toString();
+        const partnerInfo = onlineUsers.get(partnerId);
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('note_sync_update', data);
+        }
+        const gameKey = getGameKey(userId, partnerId);
+        await saveSharedNote(gameKey, data.content);
+      }
+    } catch (err) {
+      console.error(`Error relaying note_update for user ${userId}:`, err);
+    }
+  });
+
+  // ─── Hangman Socket Events ───────────────────────────────────────────────
+
+  socket.on('hangman_start', async () => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+      // First caller becomes picker, partner becomes guesser
+      const game = makeHangmanGame(userId, partnerId);
+      hangmanGames.set(gameKey, game);
+      if (userInfo) io.to(userInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, userId));
+      if (partnerInfo) io.to(partnerInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, partnerId));
+    } catch (err) {
+      console.error('hangman_start error:', err);
+    }
+  });
+
+  socket.on('hangman_set_word', async ({ word }) => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const game = hangmanGames.get(gameKey);
+      if (!game) return socket.emit('hangman_error', { message: 'No active game. Start a game first.' });
+      if (game.pickerUserId !== userId) return socket.emit('hangman_error', { message: 'It is not your turn to pick.' });
+      if (game.status !== 'waiting_for_word') return socket.emit('hangman_error', { message: 'Word already set.' });
+
+      const cleaned = (word || '').trim().toLowerCase().replace(/\s+/g, '');
+      if (!/^[a-z]+$/.test(cleaned)) return socket.emit('hangman_error', { message: 'Word must be letters only (a-z).' });
+      if (cleaned.length < 3 || cleaned.length > 20) return socket.emit('hangman_error', { message: 'Word must be 3–20 letters long.' });
+
+      game.word = cleaned;
+      game.status = 'playing';
+      hangmanGames.set(gameKey, game);
+
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+      if (userInfo) io.to(userInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, userId));
+      if (partnerInfo) io.to(partnerInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, partnerId));
+    } catch (err) {
+      console.error('hangman_set_word error:', err);
+    }
+  });
+
+  socket.on('hangman_guess_letter', async ({ letter }) => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const game = hangmanGames.get(gameKey);
+      if (!game) return socket.emit('hangman_error', { message: 'No active game.' });
+      if (game.guesserUserId !== userId) return socket.emit('hangman_error', { message: 'You are not the guesser this round.' });
+      if (game.status !== 'playing') return socket.emit('hangman_error', { message: 'Game is not in progress.' });
+
+      const ch = (letter || '').trim().toLowerCase();
+      if (!/^[a-z]$/.test(ch)) return socket.emit('hangman_error', { message: 'Invalid letter.' });
+      if (game.guessedLetters.includes(ch)) return socket.emit('hangman_error', { message: 'Letter already guessed.' });
+
+      game.guessedLetters.push(ch);
+      if (!game.word.includes(ch)) {
+        game.wrongGuesses += 1;
+      }
+
+      // Check win: all letters revealed
+      const allRevealed = game.word.split('').every(c => game.guessedLetters.includes(c));
+      if (allRevealed) {
+        game.status = 'won';
+        game.winner = userId; // guesser wins
+        await updateHangmanScore(gameKey, userId);
+      } else if (game.wrongGuesses >= game.maxWrong) {
+        game.status = 'lost';
+        game.winner = game.pickerUserId; // picker wins
+        await updateHangmanScore(gameKey, game.pickerUserId);
+      }
+
+      hangmanGames.set(gameKey, game);
+
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+      if (userInfo) io.to(userInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, userId));
+      if (partnerInfo) io.to(partnerInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, partnerId));
+    } catch (err) {
+      console.error('hangman_guess_letter error:', err);
+    }
+  });
+
+  socket.on('hangman_new_round', async () => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const prev = hangmanGames.get(gameKey);
+      // Swap roles
+      const newPicker = prev ? prev.guesserUserId : userId;
+      const newGuesser = prev ? prev.pickerUserId : partnerId;
+      const game = makeHangmanGame(newPicker, newGuesser);
+      hangmanGames.set(gameKey, game);
+
+      const userInfo = onlineUsers.get(userId);
+      const partnerInfo = onlineUsers.get(partnerId);
+      if (userInfo) io.to(userInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, userId));
+      if (partnerInfo) io.to(partnerInfo.socketId).emit('hangman_state_update', buildHangmanStateForUser(game, partnerId));
+    } catch (err) {
+      console.error('hangman_new_round error:', err);
+    }
+  });
+
+  socket.on('hangman_get_state', async () => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+      const partnerId = user.pairId.toString();
+      const gameKey = getGameKey(userId, partnerId);
+      const game = hangmanGames.get(gameKey);
+      if (game) {
+        socket.emit('hangman_state_update', buildHangmanStateForUser(game, userId));
+      }
+    } catch (err) {
+      console.error('hangman_get_state error:', err);
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   socket.on('icebreaker_start', async () => {
     try {

@@ -21,6 +21,14 @@ const pairStateSchema = new mongoose.Schema({
     remainingSeconds: { type: Number, default: 25 * 60 },
     durationMinutes: { type: Number, default: 25 }
   },
+  sharedNote: {
+    type: String,
+    default: ''
+  },
+  hangmanScore: {
+    user1Wins: { type: Number, default: 0 },
+    user2Wins: { type: Number, default: 0 }
+  },
   updatedAt: {
     type: Date,
     default: Date.now

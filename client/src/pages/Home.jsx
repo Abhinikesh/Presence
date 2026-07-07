@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import { BACKEND_URL } from '../config';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 function Home() {
   const { user, token, logout, setUser } = useAuth();
@@ -63,6 +64,15 @@ function Home() {
   // Tic-Tac-Toe Game State
   const [gameState, setGameState] = useState(null);
 
+  // Games section tab (which game is showing)
+  const [selectedGame, setSelectedGame] = useState('tictactoe'); // 'tictactoe' | 'hangman'
+
+  // Hangman State
+  const [hangmanState, setHangmanState] = useState(null);    // server state for this user's view
+  const [hangmanWordInput, setHangmanWordInput] = useState('');
+  const [hangmanError, setHangmanError] = useState('');
+  const [hangmanScores, setHangmanScores] = useState({ me: 0, partner: 0 });
+
   // Whiteboard States & Refs
   const [brushColor, setBrushColor] = useState('#1A1A1A');
   const [brushWidth, setBrushWidth] = useState(4);
@@ -86,6 +96,22 @@ function Home() {
   useEffect(() => {
     durationMinutesRef.current = durationMinutes;
   }, [durationMinutes]);
+
+  // Kanban Board State
+  const [kanbanCards, setKanbanCards] = useState({ todo: [], in_progress: [], done: [] });
+  const [kanbanNewText, setKanbanNewText] = useState('');
+  const [kanbanEditingId, setKanbanEditingId] = useState(null);
+  const [kanbanEditText, setKanbanEditText] = useState('');
+
+  // Shared Notes State & Refs
+  const [sharedNote, setSharedNote] = useState('');
+  const [partnerIsTyping, setPartnerIsTyping] = useState(false);
+  const [lastNoteUpdated, setLastNoteUpdated] = useState(null);
+  const localIsTypingRef = useRef(false);
+  const localTypingTimeoutRef = useRef(null);
+  const noteDebounceTimeoutRef = useRef(null);
+  const partnerTypingIndicatorTimeoutRef = useRef(null);
+
 
   // Watch Together refs
   const ytPlayerRef = useRef(null);
@@ -412,6 +438,70 @@ function Home() {
       setIcebreakerStatus('reveal');
     });
 
+    // Kanban live updates from partner
+    socket.on('kanban_card_created', (card) => {
+      setKanbanCards(prev => ({
+        ...prev,
+        [card.column]: [...prev[card.column], card].sort((a, b) => a.position - b.position)
+      }));
+    });
+
+    socket.on('kanban_card_moved', (card) => {
+      setKanbanCards(prev => {
+        const next = { todo: [], in_progress: [], done: [] };
+        ['todo', 'in_progress', 'done'].forEach(col => {
+          next[col] = prev[col].filter(c => c._id !== card._id);
+        });
+        next[card.column] = [...next[card.column], card].sort((a, b) => a.position - b.position);
+        return next;
+      });
+    });
+
+    socket.on('kanban_card_updated', (card) => {
+      setKanbanCards(prev => {
+        const next = { ...prev };
+        next[card.column] = prev[card.column].map(c => c._id === card._id ? card : c);
+        return next;
+      });
+    });
+
+    socket.on('kanban_card_deleted', ({ _id }) => {
+      setKanbanCards(prev => ({
+        todo: prev.todo.filter(c => c._id !== _id),
+        in_progress: prev.in_progress.filter(c => c._id !== _id),
+        done: prev.done.filter(c => c._id !== _id),
+      }));
+    });
+
+    socket.on('note_sync_update', (data) => {
+      setPartnerIsTyping(true);
+      if (partnerTypingIndicatorTimeoutRef.current) {
+        clearTimeout(partnerTypingIndicatorTimeoutRef.current);
+      }
+      partnerTypingIndicatorTimeoutRef.current = setTimeout(() => {
+        setPartnerIsTyping(false);
+      }, 2000);
+
+      if (!localIsTypingRef.current) {
+        setSharedNote(data.content || '');
+        setLastNoteUpdated(new Date());
+      }
+    });
+
+    // Hangman live updates
+    socket.on('hangman_state_update', (state) => {
+      setHangmanState(state);
+      // Sync hangman score when game ends
+      if (state.status === 'won' || state.status === 'lost') {
+        fetchPairState(partnerIdRef.current);
+      }
+    });
+
+    socket.on('hangman_error', (data) => {
+      setHangmanError(data.message || 'Something went wrong.');
+      setTimeout(() => setHangmanError(''), 3000);
+    });
+
     // Clean up socket connection on component unmount
     return () => {
       socket.disconnect();
@@ -509,6 +599,201 @@ function Home() {
       ctx.closePath();
     });
   };
+  // ── Kanban API helpers ──────────────────────────────────────
+  const groupByColumn = (cards) => {
+    const grouped = { todo: [], in_progress: [], done: [] };
+    cards.forEach(card => {
+      if (grouped[card.column]) grouped[card.column].push(card);
+    });
+    ['todo', 'in_progress', 'done'].forEach(col => {
+      grouped[col].sort((a, b) => a.position - b.position);
+    });
+    return grouped;
+  };
+
+  const fetchKanbanCards = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/kanban/cards`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const cards = await res.json();
+        setKanbanCards(groupByColumn(cards));
+      }
+    } catch (err) {
+      console.error('Error fetching kanban cards:', err);
+    }
+  };
+
+  const handleAddKanbanCard = async () => {
+    const text = kanbanNewText.trim();
+    if (!text) return;
+    setKanbanNewText('');
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/kanban/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ text, column: 'todo' })
+      });
+      if (res.ok) {
+        const card = await res.json();
+        setKanbanCards(prev => ({
+          ...prev,
+          todo: [...prev.todo, card]
+        }));
+      }
+    } catch (err) {
+      console.error('Error adding kanban card:', err);
+    }
+  };
+
+  const handleDeleteKanbanCard = async (card) => {
+    // Optimistic
+    setKanbanCards(prev => ({
+      ...prev,
+      [card.column]: prev[card.column].filter(c => c._id !== card._id)
+    }));
+    try {
+      await fetch(`${BACKEND_URL}/api/kanban/cards/${card._id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error('Error deleting kanban card:', err);
+      // Revert on failure
+      fetchKanbanCards();
+    }
+  };
+
+  const handleCommitKanbanEdit = async (card) => {
+    const newText = kanbanEditText.trim();
+    setKanbanEditingId(null);
+    if (!newText || newText === card.text) return;
+    // Optimistic
+    setKanbanCards(prev => ({
+      ...prev,
+      [card.column]: prev[card.column].map(c => c._id === card._id ? { ...c, text: newText } : c)
+    }));
+    try {
+      await fetch(`${BACKEND_URL}/api/kanban/cards/${card._id}/text`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ text: newText })
+      });
+    } catch (err) {
+      console.error('Error editing kanban card:', err);
+      fetchKanbanCards();
+    }
+  };
+
+  const handleKanbanDragEnd = async (result) => {
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
+    const srcCol = source.droppableId;
+    const dstCol = destination.droppableId;
+
+    const allCards = { ...kanbanCards };
+    const srcList = Array.from(allCards[srcCol]);
+    const [moved] = srcList.splice(source.index, 1);
+    const dstList = srcCol === dstCol ? srcList : Array.from(allCards[dstCol]);
+    dstList.splice(destination.index, 0, { ...moved, column: dstCol });
+
+    // Optimistic state update
+    const newState = { ...allCards, [srcCol]: srcList, [dstCol]: dstList };
+    // Reassign positions within affected column(s)
+    newState[dstCol] = newState[dstCol].map((c, i) => ({ ...c, position: i }));
+    if (srcCol !== dstCol) newState[srcCol] = newState[srcCol].map((c, i) => ({ ...c, position: i }));
+    setKanbanCards(newState);
+
+    // Persist: update moved card's column + position, then reorder siblings
+    try {
+      await fetch(`${BACKEND_URL}/api/kanban/cards/${draggableId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ column: dstCol, position: destination.index })
+      });
+      // Update positions of all cards in affected columns
+      const promises = [];
+      newState[dstCol].forEach((c, i) => {
+        if (c._id !== draggableId) {
+          promises.push(fetch(`${BACKEND_URL}/api/kanban/cards/${c._id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ position: i })
+          }));
+        }
+      });
+      if (srcCol !== dstCol) {
+        newState[srcCol].forEach((c, i) => {
+          promises.push(fetch(`${BACKEND_URL}/api/kanban/cards/${c._id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ position: i })
+          }));
+        });
+      }
+      await Promise.all(promises);
+    } catch (err) {
+      console.error('Error saving kanban reorder:', err);
+      fetchKanbanCards();
+    }
+  };
+
+  // ─── Hangman Handlers ────────────────────────────────────────────────────
+  const handleHangmanStart = () => {
+    if (!socketRef.current) return;
+    setHangmanError('');
+    setHangmanWordInput('');
+    socketRef.current.emit('hangman_start');
+  };
+
+  const handleHangmanSetWord = (e) => {
+    e.preventDefault();
+    if (!socketRef.current) return;
+    setHangmanError('');
+    socketRef.current.emit('hangman_set_word', { word: hangmanWordInput });
+    setHangmanWordInput('');
+  };
+
+  const handleHangmanGuess = (letter) => {
+    if (!socketRef.current) return;
+    setHangmanError('');
+    socketRef.current.emit('hangman_guess_letter', { letter });
+  };
+
+  const handleHangmanNewRound = () => {
+    if (!socketRef.current) return;
+    setHangmanError('');
+    setHangmanWordInput('');
+    socketRef.current.emit('hangman_new_round');
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleNoteChange = (e) => {
+    const val = e.target.value;
+    setSharedNote(val);
+    setLastNoteUpdated(new Date());
+
+    localIsTypingRef.current = true;
+    if (localTypingTimeoutRef.current) {
+      clearTimeout(localTypingTimeoutRef.current);
+    }
+    localTypingTimeoutRef.current = setTimeout(() => {
+      localIsTypingRef.current = false;
+    }, 1500);
+
+    if (noteDebounceTimeoutRef.current) {
+      clearTimeout(noteDebounceTimeoutRef.current);
+    }
+    noteDebounceTimeoutRef.current = setTimeout(() => {
+      if (socketRef.current) {
+        socketRef.current.emit('note_update', { content: val });
+      }
+    }, 400);
+  };
 
   const fetchPairState = async (pId = partnerId) => {
     if (!token || !pId) return;
@@ -578,6 +863,22 @@ function Home() {
             setTimerActive(false);
           }
         }
+
+        // 4. Restore Shared Notes
+        if (data.sharedNote !== undefined) {
+          setSharedNote(data.sharedNote || '');
+        }
+
+        // 5. Restore Hangman Scores
+        if (data.hangmanScore) {
+          const myId = String(user._id);
+          const pId = partnerIdRef.current;
+          if (myId < pId) {
+            setHangmanScores({ me: data.hangmanScore.user1Wins || 0, partner: data.hangmanScore.user2Wins || 0 });
+          } else {
+            setHangmanScores({ me: data.hangmanScore.user2Wins || 0, partner: data.hangmanScore.user1Wins || 0 });
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching pair state:', err);
@@ -603,6 +904,7 @@ function Home() {
             fetchPendingNote();
             fetchTasks();
             fetchPairState(data.partner.id);
+            fetchKanbanCards();
           } else {
             // If not paired, redirect to pair page
             navigate('/pair');
@@ -1818,137 +2120,302 @@ function Home() {
           {/* Games Card */}
           <div className="feature-card card-accent-games" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Games <span style={{ fontSize: '0.75rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase' }}>Play Time</span></h2>
-            
-            <div style={{ marginTop: '12px' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
-                Tic-Tac-Toe
-              </h3>
 
-              {/* Scoreboard */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: '#F5F3FF',
-                borderRadius: 'var(--radius-sm)',
-                padding: '8px 16px',
-                marginBottom: '16px',
-                border: '1px solid #DDD6FE',
-                fontSize: '0.8125rem',
-                fontWeight: '600',
-              }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: '#7C3AED', fontSize: '1.1rem', fontWeight: '800' }}>{scores.me}</div>
-                  <div style={{ color: '#6B7280', fontWeight: '500' }}>You</div>
-                </div>
-                <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: '0.75rem', fontWeight: '500' }}>— Score —</div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: '#EC4899', fontSize: '1.1rem', fontWeight: '800' }}>{scores.draws}</div>
-                  <div style={{ color: '#6B7280', fontWeight: '500' }}>Draws</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: '#F59E0B', fontSize: '1.1rem', fontWeight: '800' }}>{scores.partner}</div>
-                  <div style={{ color: '#6B7280', fontWeight: '500' }}>{partnerName || 'Partner'}</div>
-                </div>
-              </div>
+            {/* ── Game Tab Bar ── */}
+            <div className="game-tab-bar">
+              <button
+                className={`game-tab-btn${selectedGame === 'tictactoe' ? ' active' : ''}`}
+                onClick={() => setSelectedGame('tictactoe')}
+              >
+                ✕ Tic-Tac-Toe
+              </button>
+              <button
+                className={`game-tab-btn${selectedGame === 'hangman' ? ' active' : ''}`}
+                onClick={() => setSelectedGame('hangman')}
+              >
+                🪢 Hangman
+              </button>
+            </div>
 
-              {!gameState ? (
-                <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                    Play a quick game of Tic-Tac-Toe with your partner!
-                  </p>
-                  <button 
-                    onClick={handleStartGame} 
-                    className="btn btn-primary"
-                    style={{ width: '100%' }}
-                  >
-                    Start Game
-                  </button>
+            {/* ══════════ TIC-TAC-TOE ══════════ */}
+            {selectedGame === 'tictactoe' && (
+              <div>
+                {/* Scoreboard */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#F5F3FF',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '8px 16px',
+                  marginBottom: '16px',
+                  border: '1px solid #DDD6FE',
+                  fontSize: '0.8125rem',
+                  fontWeight: '600',
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#7C3AED', fontSize: '1.1rem', fontWeight: '800' }}>{scores.me}</div>
+                    <div style={{ color: '#6B7280', fontWeight: '500' }}>You</div>
+                  </div>
+                  <div style={{ textAlign: 'center', color: '#9CA3AF', fontSize: '0.75rem', fontWeight: '500' }}>— Score —</div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#EC4899', fontSize: '1.1rem', fontWeight: '800' }}>{scores.draws}</div>
+                    <div style={{ color: '#6B7280', fontWeight: '500' }}>Draws</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#F59E0B', fontSize: '1.1rem', fontWeight: '800' }}>{scores.partner}</div>
+                    <div style={{ color: '#6B7280', fontWeight: '500' }}>{partnerName || 'Partner'}</div>
+                  </div>
                 </div>
-              ) : (
-                <div>
-                  {/* Game Status/Result banner */}
-                  <div style={{ 
-                    textAlign: 'center', 
-                    marginBottom: '16px', 
-                    padding: '8px 12px',
-                    backgroundColor: '#FAF9F7',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border-color)',
-                    fontSize: '0.8125rem',
-                    fontWeight: '600',
-                    color: 'var(--text-primary)'
-                  }}>
-                    {gameState.status === 'playing' ? (
-                      gameState.turnUserId === user._id ? (
-                        <span style={{ color: 'var(--accent-color)' }}>Your turn (Playing as {gameState.playerSymbols[user._id]})</span>
+
+                {!gameState ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                      Play a quick game of Tic-Tac-Toe with your partner!
+                    </p>
+                    <button onClick={handleStartGame} className="btn btn-primary" style={{ width: '100%' }}>
+                      Start Game
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{
+                      textAlign: 'center',
+                      marginBottom: '16px',
+                      padding: '8px 12px',
+                      backgroundColor: '#FAF9F7',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-color)',
+                      fontSize: '0.8125rem',
+                      fontWeight: '600',
+                      color: 'var(--text-primary)'
+                    }}>
+                      {gameState.status === 'playing' ? (
+                        gameState.turnUserId === user._id ? (
+                          <span style={{ color: 'var(--accent-color)' }}>Your turn (Playing as {gameState.playerSymbols[user._id]})</span>
+                        ) : (
+                          <span>{partnerName || 'Partner'}'s turn</span>
+                        )
+                      ) : gameState.status === 'won' ? (
+                        gameState.winnerUserId === user._id ? (
+                          <span style={{ color: '#065F46' }}>You won! 🎉</span>
+                        ) : (
+                          <span style={{ color: 'var(--accent-color)' }}>{partnerName || 'Partner'} won!</span>
+                        )
                       ) : (
-                        <span>{partnerName || 'Partner'}'s turn</span>
-                      )
-                    ) : gameState.status === 'won' ? (
-                      gameState.winnerUserId === user._id ? (
-                        <span style={{ color: '#065F46' }}>You won!</span>
-                      ) : (
-                        <span style={{ color: 'var(--accent-color)' }}>{partnerName || 'Partner'} won!</span>
-                      )
-                    ) : (
-                      <span style={{ color: 'var(--text-secondary)' }}>It's a draw!</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>It's a draw!</span>
+                      )}
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '8px',
+                      maxWidth: '220px',
+                      margin: '0 auto 20px auto'
+                    }}>
+                      {gameState.board.map((cell, index) => {
+                        const isMyTurn = gameState.status === 'playing' && gameState.turnUserId === user._id;
+                        const isEmpty = cell === null;
+                        const canClick = isMyTurn && isEmpty;
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => canClick && handleMakeMove(index)}
+                            className={canClick ? 'tictactoe-cell-active' : ''}
+                            style={{
+                              height: '64px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#FAF9F7',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: '1.4rem',
+                              fontWeight: '700',
+                              color: cell === 'X' ? 'var(--accent-color)' : 'var(--text-primary)',
+                              cursor: canClick ? 'pointer' : 'default',
+                              userSelect: 'none',
+                              transition: 'all 0.2s ease-in-out'
+                            }}
+                          >
+                            {cell}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {gameState.status !== 'playing' && (
+                      <button onClick={handleResetGame} className="btn btn-primary" style={{ width: '100%' }}>
+                        Play Again
+                      </button>
                     )}
                   </div>
+                )}
+              </div>
+            )}
 
-                  {/* 3x3 Tic-Tac-Toe Board Grid */}
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(3, 1fr)', 
-                    gap: '8px', 
-                    maxWidth: '220px', 
-                    margin: '0 auto 20px auto'
-                  }}>
-                    {gameState.board.map((cell, index) => {
-                      const isMyTurn = gameState.status === 'playing' && gameState.turnUserId === user._id;
-                      const isEmpty = cell === null;
-                      const canClick = isMyTurn && isEmpty;
-                      
-                      return (
-                        <div
-                          key={index}
-                          onClick={() => canClick && handleMakeMove(index)}
-                          className={canClick ? 'tictactoe-cell-active' : ''}
-                          style={{
-                            height: '64px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: '#FAF9F7',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: '1.4rem',
-                            fontWeight: '700',
-                            color: cell === 'X' ? 'var(--accent-color)' : 'var(--text-primary)',
-                            cursor: canClick ? 'pointer' : 'default',
-                            userSelect: 'none',
-                            transition: 'all 0.2s ease-in-out'
-                          }}
-                        >
-                          {cell}
-                        </div>
-                      );
-                    })}
+            {/* ══════════ HANGMAN ══════════ */}
+            {selectedGame === 'hangman' && (() => {
+              const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'.split('');
+              const hs = hangmanState;
+              const isOver = hs && (hs.status === 'won' || hs.status === 'lost');
+              const isPicker = hs && hs.role === 'picker';
+              const isGuesser = hs && hs.role === 'guesser';
+
+              return (
+                <div>
+                  {/* Hangman Score bar */}
+                  <div className="hangman-score-bar">
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#7C3AED', fontSize: '1.1rem', fontWeight: '800' }}>{hangmanScores.me}</div>
+                      <div style={{ color: '#6B7280', fontWeight: '500' }}>You</div>
+                    </div>
+                    <div style={{ color: '#9CA3AF', fontSize: '0.75rem', fontWeight: '500' }}>— Wins —</div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#F59E0B', fontSize: '1.1rem', fontWeight: '800' }}>{hangmanScores.partner}</div>
+                      <div style={{ color: '#6B7280', fontWeight: '500' }}>{partnerName || 'Partner'}</div>
+                    </div>
                   </div>
 
-                  {/* Play Again button */}
-                  {gameState.status !== 'playing' && (
-                    <button 
-                      onClick={handleResetGame} 
-                      className="btn btn-primary"
-                      style={{ width: '100%' }}
-                    >
-                      Play Again
-                    </button>
+                  {/* Error toast */}
+                  {hangmanError && (
+                    <div style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#FEF2F2',
+                      border: '1px solid #FECACA',
+                      borderRadius: 'var(--radius-sm)',
+                      color: '#991B1B',
+                      fontSize: '0.8125rem',
+                      marginBottom: '12px',
+                      fontWeight: '500'
+                    }}>
+                      ⚠ {hangmanError}
+                    </div>
+                  )}
+
+                  {/* No game yet */}
+                  {!hs ? (
+                    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                        One player picks a secret word, the other guesses letter by letter!
+                      </p>
+                      <button onClick={handleHangmanStart} className="btn btn-primary" style={{ width: '100%' }}>
+                        Start Hangman
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Status banner */}
+                      {hs.status === 'waiting_for_word' && (
+                        <div className={`hangman-status-banner playing`}>
+                          {isPicker ? '🤫 You are the word picker — enter a secret word below.' : `⏳ Waiting for ${partnerName || 'your partner'} to set the word…`}
+                        </div>
+                      )}
+                      {hs.status === 'playing' && (
+                        <div className={`hangman-status-banner playing`}>
+                          {isPicker ? `🤐 You set the word (${hs.wordLength} letters). Root for your partner!` : '🔤 Your turn to guess — pick a letter below.'}
+                        </div>
+                      )}
+                      {hs.status === 'won' && (
+                        <div className={`hangman-status-banner won`}>
+                          {isGuesser ? `🎉 You guessed it! The word was "${hs.revealed.join('')}"` : `🎊 ${partnerName || 'Partner'} guessed your word "${hs.actualWord || hs.revealed.join('')}"!`}
+                        </div>
+                      )}
+                      {hs.status === 'lost' && (
+                        <div className={`hangman-status-banner lost`}>
+                          {isPicker ? `😈 They ran out of guesses! The word was "${hs.actualWord}"` : `😢 Out of guesses! The word was hidden — better luck next time.`}
+                        </div>
+                      )}
+
+                      {/* Word display (blanks/revealed) */}
+                      {hs.status !== 'waiting_for_word' && (
+                        <div className="hangman-word-display">
+                          {hs.revealed.map((ch, i) => (
+                            <div
+                              key={i}
+                              className={`hangman-letter-blank${ch !== '_' ? ' revealed' : ''}`}
+                            >
+                              {ch !== '_' ? ch : ''}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Wrong guess counter */}
+                      {hs.status === 'playing' && (
+                        <div className="hangman-wrong-counter">
+                          Wrong guesses: <span>{hs.wrongGuesses}</span> / {hs.maxWrong}
+                          {' '}{'🔴'.repeat(hs.wrongGuesses)}{'⚪'.repeat(Math.max(0, hs.maxWrong - hs.wrongGuesses))}
+                        </div>
+                      )}
+                      {isOver && hs.wrongGuesses > 0 && (
+                        <div className="hangman-wrong-counter">
+                          Final: <span>{hs.wrongGuesses}</span> / {hs.maxWrong} wrong guesses
+                        </div>
+                      )}
+
+                      {/* Picker: word input form */}
+                      {isPicker && hs.status === 'waiting_for_word' && (
+                        <form onSubmit={handleHangmanSetWord} style={{ marginTop: '8px' }}>
+                          <input
+                            type="text"
+                            className="hangman-word-input"
+                            value={hangmanWordInput}
+                            onChange={e => setHangmanWordInput(e.target.value.replace(/[^a-zA-Z]/g, ''))}
+                            placeholder="Type a secret word (3–20 letters)…"
+                            maxLength={20}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <button
+                            type="submit"
+                            className="btn btn-primary"
+                            style={{ width: '100%', marginTop: '10px' }}
+                            disabled={hangmanWordInput.trim().length < 3}
+                          >
+                            Set Word
+                          </button>
+                        </form>
+                      )}
+
+                      {/* Guesser: alphabet grid */}
+                      {isGuesser && hs.status === 'playing' && (
+                        <div className="hangman-alpha-grid">
+                          {ALPHABET.map(letter => {
+                            const isGuessed = hs.guessedLetters.includes(letter);
+                            const isCorrect = isGuessed && hs.revealed.includes(letter);
+                            const isWrong = isGuessed && !hs.revealed.includes(letter);
+                            return (
+                              <button
+                                key={letter}
+                                className={`hangman-alpha-btn${isCorrect ? ' correct' : isWrong ? ' wrong' : ''}`}
+                                onClick={() => handleHangmanGuess(letter)}
+                                disabled={isGuessed}
+                              >
+                                {letter}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* New Round button when game is over */}
+                      {isOver && (
+                        <button
+                          onClick={handleHangmanNewRound}
+                          className="btn btn-primary"
+                          style={{ width: '100%', marginTop: '16px' }}
+                        >
+                          New Round (swap roles)
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
+
           </div>
 
           {/* Icebreakers Card */}
@@ -2424,6 +2891,135 @@ function Home() {
               </div>
             )}
           </div>
+
+          {/* Kanban Board Card */}
+          <div className="feature-card card-accent-kanban" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave} style={{ gridColumn: '1 / -1' }}>
+            <h2>Kanban Board <span style={{ fontSize: '0.75rem', color: '#14B8A6', fontWeight: 'bold', textTransform: 'uppercase' }}>Shared Tasks</span></h2>
+
+            <DragDropContext onDragEnd={handleKanbanDragEnd}>
+              <div className="kanban-board">
+                {[
+                  { id: 'todo', label: 'To Do', dotColor: '#F59E0B' },
+                  { id: 'in_progress', label: 'In Progress', dotColor: '#3B82F6' },
+                  { id: 'done', label: 'Done', dotColor: '#22C55E' }
+                ].map(col => (
+                  <Droppable droppableId={col.id} key={col.id}>
+                    {(provided, snapshot) => (
+                      <div
+                        className={`kanban-column${snapshot.isDraggingOver ? ' drag-over' : ''}`}
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                      >
+                        <div className="kanban-col-header">
+                          <span className="kanban-col-title">
+                            <span className="kanban-col-dot" style={{ backgroundColor: col.dotColor }} />
+                            {col.label}
+                          </span>
+                          <span className="kanban-col-count">{kanbanCards[col.id].length}</span>
+                        </div>
+
+                        <div className="kanban-cards-list">
+                          {kanbanCards[col.id].map((card, index) => (
+                            <Draggable key={card._id} draggableId={card._id} index={index}>
+                              {(provided, snapshot) => (
+                                <div
+                                  className={`kanban-card${snapshot.isDragging ? ' is-dragging' : ''}`}
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                >
+                                  {kanbanEditingId === card._id ? (
+                                    <input
+                                      className="kanban-edit-input"
+                                      value={kanbanEditText}
+                                      onChange={(e) => setKanbanEditText(e.target.value)}
+                                      onBlur={() => handleCommitKanbanEdit(card)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') { e.preventDefault(); handleCommitKanbanEdit(card); }
+                                        if (e.key === 'Escape') setKanbanEditingId(null);
+                                      }}
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span
+                                      className="kanban-card-text"
+                                      onClick={() => { setKanbanEditingId(card._id); setKanbanEditText(card.text); }}
+                                    >
+                                      {card.text}
+                                    </span>
+                                  )}
+                                  <button
+                                    className="kanban-card-delete"
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteKanbanCard(card); }}
+                                    title="Delete"
+                                  >✕</button>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+
+                        {col.id === 'todo' && (
+                          <form className="kanban-add-form" onSubmit={(e) => { e.preventDefault(); handleAddKanbanCard(); }}>
+                            <input
+                              className="kanban-add-input"
+                              value={kanbanNewText}
+                              onChange={(e) => setKanbanNewText(e.target.value)}
+                              placeholder="+ Add a task..."
+                              maxLength={500}
+                            />
+                            <button type="submit" className="kanban-add-btn" disabled={!kanbanNewText.trim()}>Add</button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+                  </Droppable>
+                ))}
+              </div>
+            </DragDropContext>
+          </div>
+
+          {/* Shared Notes Card */}
+          <div
+            className="feature-card card-accent-notes"
+            onMouseMove={handleTiltMove}
+            onMouseLeave={handleTiltLeave}
+            style={{ gridColumn: '1 / -1' }}
+          >
+            <h2 style={{ marginBottom: '4px' }}>
+              📝 Shared Notes{' '}
+              <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                Live Synced
+              </span>
+            </h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+              A shared space for both of you — thoughts, to-dos, anything. Last write wins.
+            </p>
+
+            <textarea
+              className="shared-note-textarea"
+              value={sharedNote}
+              onChange={handleNoteChange}
+              placeholder="Start writing something together…"
+              maxLength={10000}
+              spellCheck={true}
+            />
+
+            <div className="note-typing-indicator">
+              {partnerIsTyping ? `${partnerName} is typing…` : ''}
+            </div>
+
+            <div className="note-footer">
+              <span>
+                {lastNoteUpdated
+                  ? `Last updated ${lastNoteUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Start typing to sync with your partner'}
+              </span>
+              <span>{sharedNote.length} / 10,000 chars</span>
+            </div>
+          </div>
+
         </div>
 
       </div>
