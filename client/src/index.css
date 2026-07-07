@@ -1465,3 +1465,202 @@ h3 {
   font-size: 0.8125rem;
   font-weight: 600;
 }
+
+/* ============================================================
+   Desire Meets Discretion card
+   ============================================================ */
+.card-accent-desire {
+  border-left: 4px solid #BE185D;
+}
+.card-accent-desire::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 60%; height: 60%;
+  background: radial-gradient(ellipse at top right, rgba(190, 24, 93, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  border-radius: 0 16px 0 0;
+  z-index: 0;
+}
+
+.desire-category-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.desire-cat-btn {
+  padding: 5px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border-color);
+  background: transparent;
+  font-size: 0.775rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.desire-cat-btn:hover {
+  border-color: #BE185D;
+  color: #BE185D;
+}
+.desire-cat-btn.active {
+  background: #BE185D;
+  border-color: #BE185D;
+  color: #fff;
+}
+
+.desire-question-card {
+  background: linear-gradient(135deg, #FFF1F2 0%, #FDF2F8 100%);
+  border: 1px solid #FBCFE8;
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.desire-question-card::before {
+  content: '"';
+  position: absolute;
+  top: -6px; left: 10px;
+  font-size: 5rem;
+  color: rgba(190, 24, 93, 0.08);
+  font-family: Georgia, serif;
+  line-height: 1;
+  pointer-events: none;
+}
+.desire-question-text {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #831843;
+  line-height: 1.55;
+  position: relative;
+  z-index: 1;
+}
+.desire-category-pill {
+  display: inline-block;
+  font-size: 0.675rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #BE185D;
+  background: rgba(190, 24, 93, 0.08);
+  border-radius: 100px;
+  padding: 3px 10px;
+  margin-bottom: 8px;
+}
+
+.desire-option-btn {
+  width: 100%;
+  padding: 13px 18px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-color);
+  background: #FFFFFF;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  line-height: 1.5;
+}
+.desire-option-btn:hover {
+  border-color: #BE185D;
+  background: #FFF1F2;
+  color: #831843;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(190, 24, 93, 0.12);
+}
+.desire-option-btn.selected {
+  border-color: #BE185D;
+  background: linear-gradient(135deg, #FFF1F2, #FDF2F8);
+  color: #831843;
+  font-weight: 600;
+}
+
+.desire-or-divider {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #FBCFE8;
+  margin: 6px 0;
+  text-transform: uppercase;
+}
+
+.desire-waiting-box {
+  text-align: center;
+  padding: 16px;
+  background: #FFF1F2;
+  border: 1.5px dashed #FBCFE8;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  color: #BE185D;
+  font-weight: 600;
+}
+
+.desire-reveal-match {
+  text-align: center;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.desire-reveal-match.match {
+  background: linear-gradient(135deg, #FFF1F2, #FDF2F8);
+  border: 1.5px solid #FBCFE8;
+  color: #BE185D;
+}
+.desire-reveal-match.different {
+  background: #F0F9FF;
+  border: 1.5px solid #BAE6FD;
+  color: #0369A1;
+}
+
+.desire-reveal-row {
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  background: #FAFAFA;
+}
+.desire-reveal-row .who {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+.desire-reveal-row.is-me .who { color: #BE185D; }
+.desire-reveal-row.is-partner .who { color: #7C3AED; }
+
+.desire-score-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #FFF1F2, #FDF2F8);
+  border: 1px solid #FBCFE8;
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.desire-compatibility-pct {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #BE185D;
+  line-height: 1;
+}
+.desire-compatibility-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9D174D;
+  font-weight: 700;
+}

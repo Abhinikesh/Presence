@@ -2666,6 +2666,168 @@ function Home() {
             </div>
           </div>
 
+          {/* ═══ Desire Meets Discretion Card ═══ */}
+          <div className="feature-card card-accent-desire" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+            <h2 style={{ marginBottom: '4px' }}>
+              💋 Desire Meets Discretion{' '}
+              <span style={{ fontSize: '0.75rem', color: '#BE185D', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                Explore Together
+              </span>
+            </h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Answer privately. Reveal together. Discover how you align.
+            </p>
+
+            {/* Category tab bar */}
+            <div className="desire-category-bar">
+              {[
+                { id: 'all', label: '🎲 All' },
+                { id: 'romance', label: '💕 Romance' },
+                { id: 'desires', label: '🌹 Desires' },
+                { id: 'fantasy', label: '🎭 Fantasy' },
+                { id: 'compatibility', label: '💑 Compatibility' },
+              ].map(c => (
+                <button
+                  key={c.id}
+                  className={`desire-cat-btn${desireCategory === c.id ? ' active' : ''}`}
+                  onClick={() => handleDesireCategoryChange(c.id)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Compatibility score bar — shown once at least 1 question answered */}
+            {desireTotalCount > 0 && (
+              <div className="desire-score-bar">
+                <div>
+                  <div className="desire-compatibility-pct">
+                    {Math.round((desireMatchCount / desireTotalCount) * 100)}%
+                  </div>
+                  <div className="desire-compatibility-label">Compatible</div>
+                </div>
+                <div style={{ textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                  <div>{desireMatchCount} match{desireMatchCount !== 1 ? 'es' : ''}</div>
+                  <div>out of {desireTotalCount} questions</div>
+                </div>
+              </div>
+            )}
+
+            {/* ── IDLE: Start prompt ── */}
+            {desireStatus === 'idle' && (
+              <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🌹</div>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: 1.6 }}>
+                  One question. Two private answers. Reveal simultaneously —<br />
+                  see where your desires align.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', background: 'linear-gradient(135deg, #BE185D, #9D174D)', border: 'none' }}
+                  onClick={() => handleDesireStart(desireCategory)}
+                >
+                  Begin the Game
+                </button>
+              </div>
+            )}
+
+            {/* ── PLAYING: Show question + options ── */}
+            {(desireStatus === 'playing' || desireStatus === 'waiting') && desirePrompt && (
+              <div>
+                {/* Question */}
+                <div className="desire-question-card">
+                  <div className="desire-category-pill">
+                    {desirePrompt.category === 'romance' ? '💕 Romance'
+                      : desirePrompt.category === 'desires' ? '🌹 Desires'
+                      : desirePrompt.category === 'fantasy' ? '🎭 Fantasy'
+                      : '💑 Compatibility'}
+                  </div>
+                  <div className="desire-question-text">{desirePrompt.question}</div>
+                </div>
+
+                {/* Playing: show choice buttons */}
+                {desireStatus === 'playing' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      className={`desire-option-btn${desireChoice === 'A' ? ' selected' : ''}`}
+                      onClick={() => handleDesireAnswer('A')}
+                    >
+                      <span style={{ fontWeight: '700', color: '#BE185D', marginRight: '8px' }}>A</span>
+                      {desirePrompt.optionA}
+                    </button>
+                    <div className="desire-or-divider">— or —</div>
+                    <button
+                      className={`desire-option-btn${desireChoice === 'B' ? ' selected' : ''}`}
+                      onClick={() => handleDesireAnswer('B')}
+                    >
+                      <span style={{ fontWeight: '700', color: '#BE185D', marginRight: '8px' }}>B</span>
+                      {desirePrompt.optionB}
+                    </button>
+                  </div>
+                )}
+
+                {/* Waiting: show my locked choice + waiting */}
+                {desireStatus === 'waiting' && (
+                  <div>
+                    <div className="desire-reveal-row is-me" style={{ marginBottom: '10px' }}>
+                      <div className="who">Your answer ✓</div>
+                      <div>{desireChoice === 'A' ? desirePrompt.optionA : desirePrompt.optionB}</div>
+                    </div>
+                    <div className="desire-waiting-box">
+                      ⏳ Waiting for {partnerName || 'your partner'} to choose…
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── REVEAL ── */}
+            {desireStatus === 'reveal' && desireReveal && desirePrompt && (
+              <div>
+                {/* Question recap */}
+                <div className="desire-question-card" style={{ marginBottom: '12px' }}>
+                  <div className="desire-category-pill">
+                    {desireReveal.currentPrompt?.category === 'romance' ? '💕 Romance'
+                      : desireReveal.currentPrompt?.category === 'desires' ? '🌹 Desires'
+                      : desireReveal.currentPrompt?.category === 'fantasy' ? '🎭 Fantasy'
+                      : '💑 Compatibility'}
+                  </div>
+                  <div className="desire-question-text">{desireReveal.currentPrompt?.question || desirePrompt.question}</div>
+                </div>
+
+                {/* Match/Different banner */}
+                <div className={`desire-reveal-match${desireReveal.isMatch ? ' match' : ' different'}`}>
+                  {desireReveal.isMatch
+                    ? '💕 You both feel the same way!'
+                    : '✨ Opposites attract — you chose differently!'}
+                </div>
+
+                {/* Per-user answer rows */}
+                {Object.entries(desireReveal.choices).map(([uid, choice]) => {
+                  const isMe = uid === user._id;
+                  const name = desireReveal.names[uid] || (isMe ? 'You' : partnerName || 'Partner');
+                  const prompt = desireReveal.currentPrompt || desirePrompt;
+                  const text = choice === 'A' ? prompt.optionA : prompt.optionB;
+                  return (
+                    <div key={uid} className={`desire-reveal-row${isMe ? ' is-me' : ' is-partner'}`}>
+                      <div className="who">{isMe ? 'You' : name}</div>
+                      <div>{text}</div>
+                    </div>
+                  );
+                })}
+
+                {/* Next question */}
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', marginTop: '14px', background: 'linear-gradient(135deg, #BE185D, #9D174D)', border: 'none' }}
+                  onClick={handleDesireNext}
+                >
+                  Next Question →
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Whiteboard Card */}
           <div className="feature-card card-accent-whiteboard" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Whiteboard <span style={{ fontSize: '0.75rem', color: '#2ECC71', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Canvas</span></h2>
