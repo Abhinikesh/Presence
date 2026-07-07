@@ -1187,7 +1187,14 @@ function Home() {
   }
 
   return (
-    <div className="page-top">
+    <div className="home-wrapper">
+      {/* Background Blobs */}
+      <div className="bg-blobs-premium">
+        <div className="blob-coral" style={{ top: '-10%', left: '-10%', width: '40vw', height: '40vw' }} />
+        <div className="blob-purple" style={{ bottom: '-10%', right: '-10%', width: '50vw', height: '50vw' }} />
+        <div className="blob-yellow" style={{ top: '40%', left: '40%', width: '30vw', height: '30vw', opacity: 0.03 }} />
+      </div>
+
       {/* Leave-behind Note Modal Overlay */}
       {activeNote && (
         <div style={{
@@ -1312,6 +1319,7 @@ function Home() {
           <span style={{ fontSize: '0.75rem', color: '#6B7280', marginLeft: '12px' }}>Dismiss</span>
         </div>
       )}
+
       {/* Hidden native audio element */}
       <audio
         ref={audioRef}
@@ -1320,969 +1328,944 @@ function Home() {
         onEnded={handleEnded}
       />
 
-      {/* Main Status & Pairing Card */}
-      <div className="card card-left">
-        <h2>Presence</h2>
-        {error && <div className="error-box">Error: {error}</div>}
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '24px 0' }}>
-          <span style={{ fontSize: '1.125rem', fontWeight: '500', color: 'var(--text-primary)' }}>
-            Connected with <strong style={{ color: 'var(--accent-color)', fontWeight: '700' }}>{partnerName || 'Loading partner...'}</strong>
-          </span>
-          <div className="status-indicator" style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className={`dot ${partnerOnline ? 'dot-online' : 'dot-offline'}`} />
-              <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                {partnerOnline ? `Online — ${partnerStatus}` : 'Offline'}
-              </span>
-            </div>
-            {partnerOnline && distanceApart && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', paddingLeft: '16px', fontStyle: 'italic' }}>
-                {distanceApart}
-              </span>
-            )}
+      {/* Sticky Top Navigation Bar */}
+      <nav className="home-nav">
+        <div className="home-nav-container">
+          <div className="nav-logo">
+            Presence <span className="nav-logo-dot" />
           </div>
-        </div>
-
-
-        <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-          You: <strong style={{ color: 'var(--text-primary)' }}>{myStatus}</strong>
-        </p>
-
-        <div className="btn-group mb-4">
-          {['Free', 'Studying', 'Sleeping', 'Listening'].map((status) => {
-            const isSelected = myStatus === status;
-            return (
-              <button
-                key={status}
-                onClick={() => handleStatusChange(status)}
-                className={`btn-group-item ${isSelected ? 'selected' : ''}`}
-              >
-                {status}
-              </button>
-            );
-          })}
-        </div>
-
-        <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '8px', marginTop: '32px' }}>
-          Quick Signals:
-        </p>
-        <div className="ping-group">
-          <button
-            onClick={() => handleSendPing('heart')}
-            className="btn btn-ping-heart"
-          >
-            {sentStatus.heart ? 'Sent!' : 'Send Heart'}
-          </button>
-          <button
-            onClick={() => handleSendPing('wave')}
-            className="btn btn-ping-wave"
-          >
-            {sentStatus.wave ? 'Sent!' : 'Send Wave'}
-          </button>
-          <button
-            onClick={() => handleSendPing('thinking')}
-            className="btn btn-ping-thinking"
-          >
-            {sentStatus.thinking ? 'Sent!' : 'Send Thinking of You'}
-          </button>
-        </div>
-
-        {/* Geolocation Distance Sync */}
-        <div style={{ 
-          marginTop: '24px', 
-          paddingTop: '20px', 
-          borderTop: '1px solid var(--border-color)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>Share Location</p>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                Your exact location is never shown, only distance
-              </p>
-            </div>
-            <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px' }}>
-              <input 
-                type="checkbox" 
-                checked={shareLocation} 
-                onChange={handleToggleLocation} 
-                style={{ opacity: 0, width: 0, height: 0 }}
-              />
-              <span style={{
-                position: 'absolute',
-                cursor: 'pointer',
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: shareLocation ? 'var(--accent-color)' : '#ccc',
-                transition: '0.4s',
-                borderRadius: '24px'
-              }}>
-                <span style={{
-                  position: 'absolute',
-                  content: '""',
-                  height: '18px', width: '18px',
-                  left: shareLocation ? '22px' : '4px',
-                  bottom: '3px',
-                  backgroundColor: 'white',
-                  transition: '0.4s',
-                  borderRadius: '50%'
-                }} />
-              </span>
-            </label>
+          <div className="partner-status-compact">
+            <span className={`dot ${partnerOnline ? 'dot-online' : 'dot-offline'}`} />
+            <span>
+              {partnerName || 'Partner'}: {partnerOnline ? partnerStatus || 'Free' : 'Offline'}
+            </span>
           </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', marginTop: '36px', justifyContent: 'center' }}>
-          <button 
-            onClick={handleUnpair} 
-            className="btn"
-            style={{ 
-              flex: 1, 
-              padding: '8px 12px', 
-              fontSize: '0.75rem', 
-              color: 'var(--text-secondary)',
-              backgroundColor: 'transparent',
-              border: '1px solid var(--border-color)' 
-            }}
-          >
-            Unpair
-          </button>
-          <button 
-            onClick={handleLogout} 
-            className="btn"
-            style={{ 
-              flex: 1, 
-              padding: '8px 12px', 
-              fontSize: '0.75rem', 
-              color: 'var(--text-secondary)',
-              backgroundColor: 'transparent',
-              border: '1px solid var(--border-color)' 
-            }}
-          >
+          <button onClick={handleLogout} className="btn-logout-compact">
             Logout
           </button>
         </div>
-      </div>
+      </nav>
 
-      {/* Leave a Note Card */}
-      <div className="card card-left">
-        <h2>Leave a Note</h2>
+      {/* Main Content Container */}
+      <div className="home-content-container">
         
-        <form onSubmit={handleLeaveNote} style={{ marginTop: '16px' }}>
-          <div className="form-group">
-            <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>
-              Attach a note for your partner
-            </label>
-            <textarea
-              maxLength="300"
-              placeholder="Type your note here... (max 300 chars)"
-              value={noteMessage}
-              onChange={(e) => setNoteMessage(e.target.value)}
-              className="input-text"
-              style={{ 
-                width: '100%', 
-                minHeight: '80px', 
-                resize: 'vertical',
-                padding: '12px',
-                fontFamily: 'inherit',
-                fontSize: '0.875rem'
-              }}
-            />
+        {/* HeroGreeting / Summary strip */}
+        <div className="home-hero-strip">
+          <h1 className="hero-greeting">
+            Hey {user.name.split(' ')[0] || user.name}, <span className="partner-name">{partnerName || 'your partner'}</span> is {partnerOnline ? partnerStatus || 'Free' : 'Offline'} 🌙
+          </h1>
+          <div className="hero-distance-line">
+            {partnerOnline && distanceApart && (
+              <>
+                <span>📍 {distanceApart}</span>
+                <span>•</span>
+              </>
+            )}
+            <span>Socket: {isConnected ? 'Connected 🟢' : 'Disconnected 🔴'}</span>
           </div>
+        </div>
 
-          <div className="form-group" style={{ marginTop: '16px' }}>
-            <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>
-              Show this note when they switch to:
-            </label>
-            <select
-              value={noteTriggerStatus}
-              onChange={(e) => setNoteTriggerStatus(e.target.value)}
-              className="input-text"
-              style={{ width: '100%', padding: '8px 12px' }}
-            >
-              <option value="Free">Free</option>
-              <option value="Studying">Studying</option>
-              <option value="Sleeping">Sleeping</option>
-              <option value="Listening">Listening</option>
-            </select>
-          </div>
-
-          <button 
-            type="submit" 
-            className="btn btn-primary" 
-            style={{ width: '100%', marginTop: '20px' }}
-          >
-            Leave Note
-          </button>
-
-          {noteFeedback && (
-            <div style={{ 
-              color: '#065F46', 
-              backgroundColor: '#ECFDF5', 
-              border: '1px solid #A7F3D0',
-              padding: '10px 14px',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.875rem', 
-              marginTop: '12px',
-              fontWeight: '500',
-              textAlign: 'center'
-            }}>
-              {noteFeedback}
+        {/* Quick Actions Zone */}
+        <div className="quick-actions-strip">
+          {/* Left Panel: Status Selectors */}
+          <div className="quick-actions-panel">
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Your Status</h3>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              You are currently: <strong style={{ color: 'var(--text-primary)' }}>{myStatus}</strong>
+            </p>
+            
+            <div className="btn-group" style={{ margin: '0 0 20px 0', gap: '8px' }}>
+              {['Free', 'Studying', 'Sleeping', 'Listening'].map((status) => {
+                const isSelected = myStatus === status;
+                return (
+                  <button
+                    key={status}
+                    onClick={() => handleStatusChange(status)}
+                    className={`btn-group-item ${isSelected ? 'selected' : ''}`}
+                    style={{ padding: '8px 12px', fontSize: '0.8125rem' }}
+                  >
+                    {status}
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </form>
-      </div>
 
-      {/* Study Room Card */}
-      <div className="card card-left">
-        <h2>Study Room</h2>
-        
-        {/* Pomodoro Timer display */}
-        <div style={{ 
-          textAlign: 'center', 
-          margin: '20px 0', 
-          backgroundColor: '#FAF9F7', 
-          borderRadius: 'var(--radius)', 
-          border: '1px solid var(--border-color)',
-          padding: '24px 16px'
-        }}>
-          {/* Preset Buttons */}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '16px' }}>
-            {[15, 25, 45, 60].map((mins) => (
-              <button
-                key={mins}
-                onClick={() => handlePresetChange(mins)}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '16px' }}>
+              <div>
+                <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>Share Location</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Only distance is calculated and shared
+                </p>
+              </div>
+              <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px' }}>
+                <input 
+                  type="checkbox" 
+                  checked={shareLocation} 
+                  onChange={handleToggleLocation} 
+                  style={{ opacity: 0, width: 0, height: 0 }}
+                />
+                <span style={{
+                  position: 'absolute',
+                  cursor: 'pointer',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: shareLocation ? 'var(--accent-color)' : '#ccc',
+                  transition: '0.4s',
+                  borderRadius: '24px'
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    content: '""',
+                    height: '18px', width: '18px',
+                    left: shareLocation ? '22px' : '4px',
+                    bottom: '3px',
+                    backgroundColor: 'white',
+                    transition: '0.4s',
+                    borderRadius: '50%'
+                  }} />
+                </span>
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <button 
+                onClick={handleUnpair} 
                 className="btn"
-                style={{
-                  width: 'auto',
-                  padding: '4px 10px',
-                  fontSize: '0.75rem',
-                  backgroundColor: durationMinutes === mins ? 'var(--accent-color)' : 'transparent',
-                  color: durationMinutes === mins ? 'white' : 'var(--text-secondary)',
+                style={{ 
+                  padding: '6px 12px', 
+                  fontSize: '0.75rem', 
+                  color: 'var(--text-secondary)',
+                  backgroundColor: 'transparent',
                   border: '1px solid var(--border-color)',
-                  borderColor: durationMinutes === mins ? 'var(--accent-color)' : 'var(--border-color)'
+                  width: 'auto'
                 }}
               >
-                {mins}m
+                Unpair Partner
               </button>
-            ))}
-          </div>
-
-          {/* Large timer numbers */}
-          <div style={{ 
-            fontSize: '3rem', 
-            fontWeight: '700', 
-            fontFamily: 'monospace', 
-            letterSpacing: '0.05em',
-            color: timerActive ? 'var(--accent-color)' : 'var(--text-primary)',
-            margin: '8px 0'
-          }}>
-            {formatTime(remainingSeconds)}
-          </div>
-
-          {/* Start / Pause / Reset controls */}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '16px' }}>
-            {!timerActive ? (
-              <button 
-                onClick={() => handleTimerStart()} 
-                className="btn btn-primary"
-                style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem' }}
-              >
-                Start
-              </button>
-            ) : (
-              <button 
-                onClick={handleTimerPause} 
-                className="btn"
-                style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem', border: '1px solid var(--border-color)' }}
-              >
-                Pause
-              </button>
-            )}
-            <button 
-              onClick={handleTimerReset} 
-              className="btn"
-              style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem', border: '1px solid var(--border-color)' }}
-            >
-              Reset
-            </button>
-          </div>
-
-          {/* Focus completion message */}
-          {focusCompletionMsg && (
-            <div style={{ 
-              color: '#065F46', 
-              fontSize: '0.875rem', 
-              fontWeight: '500', 
-              marginTop: '16px' 
-            }}>
-              {focusCompletionMsg}
             </div>
-          )}
+          </div>
+
+          {/* Right Panel: Send Signal / Leave Note */}
+          <div className="quick-actions-panel">
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Interact</h3>
+            
+            <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+              Quick Signals:
+            </p>
+            <div className="ping-group" style={{ marginBottom: '20px' }}>
+              <button onClick={() => handleSendPing('heart')} className="btn btn-ping-heart">
+                {sentStatus.heart ? 'Sent!' : 'Send Heart ❤️'}
+              </button>
+              <button onClick={() => handleSendPing('wave')} className="btn btn-ping-wave">
+                {sentStatus.wave ? 'Sent!' : 'Send Wave 👋'}
+              </button>
+              <button onClick={() => handleSendPing('thinking')} className="btn btn-ping-thinking">
+                {sentStatus.thinking ? 'Sent!' : 'Send Think 💭'}
+              </button>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <form onSubmit={handleLeaveNote}>
+                <div className="form-group">
+                  <label className="form-label" style={{ marginBottom: '6px', display: 'block' }}>
+                    Leave a note for next status change:
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                    <input
+                      type="text"
+                      maxLength="300"
+                      placeholder="Type a note... (e.g. Wake up!)"
+                      value={noteMessage}
+                      onChange={(e) => setNoteMessage(e.target.value)}
+                      className="input-text"
+                      style={{ flex: 1, padding: '8px 12px' }}
+                    />
+                    <select
+                      value={noteTriggerStatus}
+                      onChange={(e) => setNoteTriggerStatus(e.target.value)}
+                      className="input-text"
+                      style={{ width: '120px', padding: '8px 12px' }}
+                    >
+                      <option value="Free">Free</option>
+                      <option value="Studying">Studying</option>
+                      <option value="Sleeping">Sleeping</option>
+                      <option value="Listening">Listening</option>
+                    </select>
+                  </div>
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.8125rem', width: 'auto' }}>
+                  Leave Note
+                </button>
+                
+                {noteFeedback && (
+                  <div style={{ 
+                    color: '#065F46', 
+                    backgroundColor: '#ECFDF5', 
+                    border: '1px solid #A7F3D0',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.75rem', 
+                    marginTop: '8px',
+                    fontWeight: '500',
+                    textAlign: 'center'
+                  }}>
+                    {noteFeedback}
+                  </div>
+                )}
+              </form>
+            </div>
+          </div>
         </div>
 
-        {/* Shared Task List */}
-        <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
-            Shared Task List
-          </h3>
-
-          <form onSubmit={handleAddTask} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <input
-              type="text"
-              placeholder="Add a study goal..."
-              value={newTaskText}
-              onChange={(e) => setNewTaskText(e.target.value)}
-              className="input-text"
-              style={{ flex: 1, padding: '8px 12px' }}
-            />
-            <button type="submit" className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }}>
-              Add
-            </button>
-          </form>
-
-          {/* Tasks checklist */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-            {tasks.length === 0 ? (
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', textAlign: 'center', fontStyle: 'italic', padding: '12px 0' }}>
-                No tasks added yet. Keep each other motivated!
-              </p>
-            ) : (
-              tasks.map((task) => (
-                <div 
-                  key={task._id} 
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    backgroundColor: '#FAF9F7',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border-color)'
-                  }}
-                >
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
-                    <input
-                      type="checkbox"
-                      checked={task.completed}
-                      onChange={() => handleToggleTask(task._id)}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
-                    />
-                    <span style={{ 
-                      fontSize: '0.875rem', 
-                      color: task.completed ? 'var(--text-secondary)' : 'var(--text-primary)',
-                      textDecoration: task.completed ? 'line-through' : 'none',
-                      wordBreak: 'break-all'
-                    }}>
-                      {task.text}
-                    </span>
-                  </label>
+        {/* Feature Grid */}
+        <div className="dashboard-grid">
+          {/* Study Room Card */}
+          <div className="feature-card card-accent-study">
+            <h2>Study Room <span style={{ fontSize: '0.75rem', color: '#4A90E2', fontWeight: 'bold', textTransform: 'uppercase' }}>Focus Zone</span></h2>
+            
+            {/* Pomodoro Timer display */}
+            <div style={{ 
+              textAlign: 'center', 
+              margin: '16px 0', 
+              backgroundColor: '#FAF9F7', 
+              borderRadius: 'var(--radius)', 
+              border: '1px solid var(--border-color)',
+              padding: '20px 16px'
+            }}>
+              {/* Preset Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '16px' }}>
+                {[15, 25, 45, 60].map((mins) => (
                   <button
-                    onClick={() => handleDeleteTask(task._id)}
+                    key={mins}
+                    onClick={() => handlePresetChange(mins)}
+                    className="btn"
                     style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#EF4444',
+                      width: 'auto',
+                      padding: '4px 10px',
                       fontSize: '0.75rem',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      padding: '4px'
+                      backgroundColor: durationMinutes === mins ? 'var(--accent-color)' : 'transparent',
+                      color: durationMinutes === mins ? 'white' : 'var(--text-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderColor: durationMinutes === mins ? 'var(--accent-color)' : 'var(--border-color)'
                     }}
                   >
-                    Delete
+                    {mins}m
                   </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Games Card */}
-      <div className="card card-left">
-        <h2>Games</h2>
-        
-        <div style={{ marginTop: '16px' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
-            Tic-Tac-Toe
-          </h3>
-
-          {!gameState ? (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                Play a quick game of Tic-Tac-Toe with your partner!
-              </p>
-              <button 
-                onClick={handleStartGame} 
-                className="btn btn-primary"
-                style={{ width: '100%' }}
-              >
-                Start Game
-              </button>
-            </div>
-          ) : (
-            <div>
-              {/* Game Status/Result banner */}
-              <div style={{ 
-                textAlign: 'center', 
-                marginBottom: '16px', 
-                padding: '8px 12px',
-                backgroundColor: '#FAF9F7',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border-color)',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                color: 'var(--text-primary)'
-              }}>
-                {gameState.status === 'playing' ? (
-                  gameState.turnUserId === user._id ? (
-                    <span style={{ color: 'var(--accent-color)' }}>Your turn (Playing as {gameState.playerSymbols[user._id]})</span>
-                  ) : (
-                    <span>{partnerName || 'Partner'}'s turn</span>
-                  )
-                ) : gameState.status === 'won' ? (
-                  gameState.winnerUserId === user._id ? (
-                    <span style={{ color: '#065F46' }}>You won!</span>
-                  ) : (
-                    <span style={{ color: 'var(--accent-color)' }}>{partnerName || 'Partner'} won!</span>
-                  )
-                ) : (
-                  <span style={{ color: 'var(--text-secondary)' }}>It's a draw!</span>
-                )}
+                ))}
               </div>
 
-              {/* 3x3 Tic-Tac-Toe Board Grid */}
+              {/* Large timer numbers */}
               <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(3, 1fr)', 
-                gap: '8px', 
-                maxWidth: '240px', 
-                margin: '0 auto 20px auto'
+                fontSize: '3rem', 
+                fontWeight: '700', 
+                fontFamily: 'monospace', 
+                letterSpacing: '0.05em',
+                color: timerActive ? 'var(--accent-color)' : 'var(--text-primary)',
+                margin: '8px 0'
               }}>
-                {gameState.board.map((cell, index) => {
-                  const isMyTurn = gameState.status === 'playing' && gameState.turnUserId === user._id;
-                  const isEmpty = cell === null;
-                  const canClick = isMyTurn && isEmpty;
-                  
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => canClick && handleMakeMove(index)}
-                      className={canClick ? 'tictactoe-cell-active' : ''}
-                      style={{
-                        height: '72px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                {formatTime(remainingSeconds)}
+              </div>
+
+              {/* Start / Pause / Reset controls */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '16px' }}>
+                {!timerActive ? (
+                  <button 
+                    onClick={() => handleTimerStart()} 
+                    className="btn btn-primary"
+                    style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem' }}
+                  >
+                    Start
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleTimerPause} 
+                    className="btn"
+                    style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem', border: '1px solid var(--border-color)' }}
+                  >
+                    Pause
+                  </button>
+                )}
+                <button 
+                  onClick={handleTimerReset} 
+                  className="btn"
+                  style={{ width: 'auto', padding: '8px 16px', fontSize: '0.875rem', border: '1px solid var(--border-color)' }}
+                >
+                  Reset
+                </button>
+              </div>
+
+              {/* Focus completion message */}
+              {focusCompletionMsg && (
+                <div style={{ 
+                  color: '#065F46', 
+                  fontSize: '0.875rem', 
+                  fontWeight: '500', 
+                  marginTop: '16px' 
+                }}>
+                  {focusCompletionMsg}
+                </div>
+              )}
+            </div>
+
+            {/* Shared Task List */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                Shared Task List
+              </h3>
+
+              <form onSubmit={handleAddTask} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  placeholder="Add a study goal..."
+                  value={newTaskText}
+                  onChange={(e) => setNewTaskText(e.target.value)}
+                  className="input-text"
+                  style={{ flex: 1, padding: '8px 12px' }}
+                />
+                <button type="submit" className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }}>
+                  Add
+                </button>
+              </form>
+
+              {/* Tasks checklist */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+                {tasks.length === 0 ? (
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', textAlign: 'center', fontStyle: 'italic', padding: '12px 0' }}>
+                    No tasks added yet. Keep each other motivated!
+                  </p>
+                ) : (
+                  tasks.map((task) => (
+                    <div 
+                      key={task._id} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
                         backgroundColor: '#FAF9F7',
-                        border: '1px solid var(--border-color)',
                         borderRadius: 'var(--radius-sm)',
-                        fontSize: '1.5rem',
-                        fontWeight: '700',
-                        color: cell === 'X' ? 'var(--accent-color)' : 'var(--text-primary)',
-                        cursor: canClick ? 'pointer' : 'default',
-                        userSelect: 'none',
-                        transition: 'all 0.2s ease-in-out'
+                        border: '1px solid var(--border-color)'
                       }}
                     >
-                      {cell}
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}>
+                        <input
+                          type="checkbox"
+                          checked={task.completed}
+                          onChange={() => handleToggleTask(task._id)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
+                        />
+                        <span style={{ 
+                          fontSize: '0.8125rem', 
+                          color: task.completed ? 'var(--text-secondary)' : 'var(--text-primary)',
+                          textDecoration: task.completed ? 'line-through' : 'none',
+                          wordBreak: 'break-all'
+                        }}>
+                          {task.text}
+                        </span>
+                      </label>
+                      <button
+                        onClick={() => handleDeleteTask(task._id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#EF4444',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          padding: '4px'
+                        }}
+                      >
+                        Delete
+                      </button>
                     </div>
-                  );
-                })}
+                  ))
+                )}
               </div>
-
-              {/* Play Again button */}
-              {gameState.status !== 'playing' && (
-                <button 
-                  onClick={handleResetGame} 
-                  className="btn btn-primary"
-                  style={{ width: '100%' }}
-                >
-                  Play Again
-                </button>
-              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* Icebreakers Card */}
-      <div className="card card-left">
-        <h2>Icebreakers</h2>
-        
-        <div style={{ marginTop: '16px' }}>
-          <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>
-            Would You Rather
-          </h3>
+          {/* Games Card */}
+          <div className="feature-card card-accent-games">
+            <h2>Games <span style={{ fontSize: '0.75rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase' }}>Play Time</span></h2>
+            
+            <div style={{ marginTop: '12px' }}>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                Tic-Tac-Toe
+              </h3>
 
-          {icebreakerStatus === 'idle' ? (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                Answer fun questions privately, then reveal choices simultaneously!
-              </p>
-              <button 
-                onClick={handleStartIcebreaker} 
-                className="btn btn-primary"
-                style={{ width: '100%' }}
-              >
-                Start Icebreaker
-              </button>
-            </div>
-          ) : (
-            <div>
-              {/* Question Banner */}
-              <div style={{ marginBottom: '16px', textAlign: 'center' }}>
-                <span style={{ 
-                  fontSize: '0.75rem', 
-                  fontWeight: '600', 
-                  color: 'var(--accent-color)', 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '0.05em' 
-                }}>
-                  Would you rather...
-                </span>
-              </div>
-
-              {/* Option Choice Panels */}
-              {icebreakerStatus === 'playing' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <button
-                    onClick={() => handleIcebreakerAnswer('A')}
-                    className="btn"
-                    style={{
-                      padding: '16px 20px',
-                      textAlign: 'left',
-                      fontSize: '0.9375rem',
-                      fontWeight: '600',
-                      backgroundColor: '#FAF9F7',
-                      color: 'var(--text-primary)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
+              {!gameState ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                    Play a quick game of Tic-Tac-Toe with your partner!
+                  </p>
+                  <button 
+                    onClick={handleStartGame} 
+                    className="btn btn-primary"
+                    style={{ width: '100%' }}
                   >
-                    {icebreakerPrompt.optionA}
+                    Start Game
                   </button>
-
+                </div>
+              ) : (
+                <div>
+                  {/* Game Status/Result banner */}
                   <div style={{ 
                     textAlign: 'center', 
-                    fontSize: '0.75rem', 
-                    fontWeight: '700', 
-                    color: 'var(--text-secondary)',
-                    margin: '4px 0' 
-                  }}>
-                    OR
-                  </div>
-
-                  <button
-                    onClick={() => handleIcebreakerAnswer('B')}
-                    className="btn"
-                    style={{
-                      padding: '16px 20px',
-                      textAlign: 'left',
-                      fontSize: '0.9375rem',
-                      fontWeight: '600',
-                      backgroundColor: '#FAF9F7',
-                      color: 'var(--text-primary)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    {icebreakerPrompt.optionB}
-                  </button>
-                </div>
-              )}
-
-              {/* Waiting Panel */}
-              {icebreakerStatus === 'waiting' && (
-                <div style={{ padding: '16px', textAlign: 'center' }}>
-                  {/* Show my choice highlighted */}
-                  <div style={{
-                    padding: '12px 16px',
-                    backgroundColor: '#FDF1EE',
-                    border: '1.5px solid var(--accent-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.875rem',
-                    fontWeight: '600',
-                    color: 'var(--accent-color)',
-                    marginBottom: '16px',
-                    textAlign: 'left'
-                  }}>
-                    Your choice: {icebreakerChoice === 'A' ? icebreakerPrompt.optionA : icebreakerPrompt.optionB}
-                  </div>
-                  
-                  <div style={{ 
-                    fontSize: '0.875rem', 
-                    fontWeight: '600', 
-                    color: 'var(--text-secondary)',
-                    padding: '12px',
-                    backgroundColor: '#FAF9F7',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)'
-                  }}>
-                    Waiting for your partner to answer...
-                  </div>
-                </div>
-              )}
-
-              {/* Reveal Panel */}
-              {icebreakerStatus === 'reveal' && icebreakerRevealData && (
-                <div>
-                  {/* Matched/Mismatched Header */}
-                  <div style={{
-                    textAlign: 'center',
+                    marginBottom: '16px', 
                     padding: '8px 12px',
+                    backgroundColor: '#FAF9F7',
                     borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.875rem',
-                    fontWeight: '700',
-                    marginBottom: '16px',
-                    backgroundColor: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
-                      ? '#E6F4EA' 
-                      : '#FAF9F7',
-                    color: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
-                      ? '#137333' 
-                      : 'var(--text-secondary)',
-                    border: '1px solid',
-                    borderColor: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
-                      ? '#81C784' 
-                      : 'var(--border-color)'
+                    border: '1px solid var(--border-color)',
+                    fontSize: '0.8125rem',
+                    fontWeight: '600',
+                    color: 'var(--text-primary)'
                   }}>
-                    {Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
-                      ? "You both agreed!" 
-                      : "You picked differently!"}
+                    {gameState.status === 'playing' ? (
+                      gameState.turnUserId === user._id ? (
+                        <span style={{ color: 'var(--accent-color)' }}>Your turn (Playing as {gameState.playerSymbols[user._id]})</span>
+                      ) : (
+                        <span>{partnerName || 'Partner'}'s turn</span>
+                      )
+                    ) : gameState.status === 'won' ? (
+                      gameState.winnerUserId === user._id ? (
+                        <span style={{ color: '#065F46' }}>You won!</span>
+                      ) : (
+                        <span style={{ color: 'var(--accent-color)' }}>{partnerName || 'Partner'} won!</span>
+                      )
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>It's a draw!</span>
+                    )}
                   </div>
 
-                  {/* Choice Lists */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-                    {Object.entries(icebreakerRevealData.choices).map(([uid, choice]) => {
-                      const name = icebreakerRevealData.names[uid] || 'Someone';
-                      const choiceText = choice === 'A' ? icebreakerPrompt.optionA : icebreakerPrompt.optionB;
-                      const isMe = uid === user._id;
-
+                  {/* 3x3 Tic-Tac-Toe Board Grid */}
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(3, 1fr)', 
+                    gap: '8px', 
+                    maxWidth: '220px', 
+                    margin: '0 auto 20px auto'
+                  }}>
+                    {gameState.board.map((cell, index) => {
+                      const isMyTurn = gameState.status === 'playing' && gameState.turnUserId === user._id;
+                      const isEmpty = cell === null;
+                      const canClick = isMyTurn && isEmpty;
+                      
                       return (
-                        <div 
-                          key={uid}
+                        <div
+                          key={index}
+                          onClick={() => canClick && handleMakeMove(index)}
+                          className={canClick ? 'tictactoe-cell-active' : ''}
                           style={{
-                            padding: '12px 16px',
+                            height: '64px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                             backgroundColor: '#FAF9F7',
-                            border: isMe ? '1px solid var(--border-color)' : '1px solid var(--accent-color)',
-                            borderRadius: 'var(--radius-sm)'
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 'var(--radius-sm)',
+                            fontSize: '1.4rem',
+                            fontWeight: '700',
+                            color: cell === 'X' ? 'var(--accent-color)' : 'var(--text-primary)',
+                            cursor: canClick ? 'pointer' : 'default',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease-in-out'
                           }}
                         >
-                          <div style={{ 
-                            fontSize: '0.75rem', 
-                            fontWeight: '700', 
-                            color: isMe ? 'var(--text-secondary)' : 'var(--accent-color)',
-                            textTransform: 'uppercase',
-                            marginBottom: '4px'
-                          }}>
-                            {isMe ? 'You' : name}
-                          </div>
-                          <div style={{ fontSize: '0.9375rem', fontWeight: '600', color: 'var(--text-primary)' }}>
-                            {choiceText}
-                          </div>
+                          {cell}
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* Next Prompt Control */}
-                  <button 
-                    onClick={handleNextIcebreaker} 
-                    className="btn btn-primary"
-                    style={{ width: '100%' }}
-                  >
-                    Next Prompt
-                  </button>
+                  {/* Play Again button */}
+                  {gameState.status !== 'playing' && (
+                    <button 
+                      onClick={handleResetGame} 
+                      className="btn btn-primary"
+                      style={{ width: '100%' }}
+                    >
+                      Play Again
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Whiteboard Card */}
-      <div className="card card-left">
-        <h2>Whiteboard</h2>
-        
-        {/* Controls: Brush Presets & Width */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          gap: '12px',
-          marginBottom: '16px',
-          flexWrap: 'wrap'
-        }}>
-          {/* Preset Colors */}
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {['#1A1A1A', '#E8623F', '#4A90E2', '#2ECC71', '#F1C40F', '#9B59B6'].map((color) => (
-              <button
-                key={color}
-                onClick={() => setBrushColor(color)}
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  backgroundColor: color,
-                  border: brushColor === color ? '2px solid #FFFFFF' : '1px solid var(--border-color)',
-                  boxShadow: brushColor === color ? '0 0 0 2px var(--accent-color)' : 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  transition: 'all 0.15s ease'
-                }}
-              />
-            ))}
           </div>
 
-          {/* Size Preset controls */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Size:</span>
-            {[
-              { label: 'S', size: 2 },
-              { label: 'M', size: 5 },
-              { label: 'L', size: 12 }
-            ].map((preset) => (
-              <button
-                key={preset.size}
-                onClick={() => setBrushWidth(preset.size)}
-                className="btn"
-                style={{
-                  width: 'auto',
-                  padding: '2px 8px',
-                  fontSize: '0.7rem',
-                  backgroundColor: brushWidth === preset.size ? 'var(--accent-color)' : 'transparent',
-                  color: brushWidth === preset.size ? 'white' : 'var(--text-secondary)',
-                  border: '1px solid var(--border-color)',
-                  borderColor: brushWidth === preset.size ? 'var(--accent-color)' : 'var(--border-color)'
-                }}
-              >
-                {preset.label}
-              </button>
-            ))}
+          {/* Icebreakers Card */}
+          <div className="feature-card card-accent-icebreakers">
+            <h2>Icebreakers <span style={{ fontSize: '0.75rem', color: '#EC4899', fontWeight: 'bold', textTransform: 'uppercase' }}>Would You Rather</span></h2>
+            
+            <div style={{ marginTop: '12px' }}>
+              {icebreakerStatus === 'idle' ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                    Answer fun questions privately, then reveal choices simultaneously!
+                  </p>
+                  <button 
+                    onClick={handleStartIcebreaker} 
+                    className="btn btn-primary"
+                    style={{ width: '100%' }}
+                  >
+                    Start Icebreaker
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  {/* Question Banner */}
+                  <div style={{ marginBottom: '12px', textAlign: 'center' }}>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      fontWeight: '600', 
+                      color: 'var(--accent-color)', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '0.05em' 
+                    }}>
+                      Would you rather...
+                    </span>
+                  </div>
+
+                  {/* Option Choice Panels */}
+                  {icebreakerStatus === 'playing' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <button
+                        onClick={() => handleIcebreakerAnswer('A')}
+                        className="btn"
+                        style={{
+                          padding: '12px 16px',
+                          textAlign: 'left',
+                          fontSize: '0.875rem',
+                          fontWeight: '600',
+                          backgroundColor: '#FAF9F7',
+                          color: 'var(--text-primary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {icebreakerPrompt.optionA}
+                      </button>
+
+                      <div style={{ 
+                        textAlign: 'center', 
+                        fontSize: '0.7rem', 
+                        fontWeight: '700', 
+                        color: 'var(--text-secondary)',
+                        margin: '2px 0' 
+                      }}>
+                        OR
+                      </div>
+
+                      <button
+                        onClick={() => handleIcebreakerAnswer('B')}
+                        className="btn"
+                        style={{
+                          padding: '12px 16px',
+                          textAlign: 'left',
+                          fontSize: '0.875rem',
+                          fontWeight: '600',
+                          backgroundColor: '#FAF9F7',
+                          color: 'var(--text-primary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {icebreakerPrompt.optionB}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Waiting Panel */}
+                  {icebreakerStatus === 'waiting' && (
+                    <div style={{ padding: '8px 0', textAlign: 'center' }}>
+                      {/* Show my choice highlighted */}
+                      <div style={{
+                        padding: '10px 14px',
+                        backgroundColor: '#FDF1EE',
+                        border: '1.5px solid var(--accent-color)',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.8125rem',
+                        fontWeight: '600',
+                        color: 'var(--accent-color)',
+                        marginBottom: '12px',
+                        textAlign: 'left'
+                      }}>
+                        Your choice: {icebreakerChoice === 'A' ? icebreakerPrompt.optionA : icebreakerPrompt.optionB}
+                      </div>
+                      
+                      <div style={{ 
+                        fontSize: '0.8125rem', 
+                        fontWeight: '600', 
+                        color: 'var(--text-secondary)',
+                        padding: '10px',
+                        backgroundColor: '#FAF9F7',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-sm)'
+                      }}>
+                        Waiting for your partner to answer...
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reveal Panel */}
+                  {icebreakerStatus === 'reveal' && icebreakerRevealData && (
+                    <div>
+                      {/* Matched/Mismatched Header */}
+                      <div style={{
+                        textAlign: 'center',
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.8125rem',
+                        fontWeight: '700',
+                        marginBottom: '12px',
+                        backgroundColor: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                          ? '#E6F4EA' 
+                          : '#FAF9F7',
+                        color: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                          ? '#137333' 
+                          : 'var(--text-secondary)',
+                        border: '1px solid',
+                        borderColor: Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                          ? '#81C784' 
+                          : 'var(--border-color)'
+                      }}>
+                        {Object.values(icebreakerRevealData.choices)[0] === Object.values(icebreakerRevealData.choices)[1] 
+                          ? "You both agreed!" 
+                          : "You picked differently!"}
+                      </div>
+
+                      {/* Choice Lists */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                        {Object.entries(icebreakerRevealData.choices).map(([uid, choice]) => {
+                          const name = icebreakerRevealData.names[uid] || 'Someone';
+                          const choiceText = choice === 'A' ? icebreakerPrompt.optionA : icebreakerPrompt.optionB;
+                          const isMe = uid === user._id;
+
+                          return (
+                            <div 
+                              key={uid}
+                              style={{
+                                padding: '10px 14px',
+                                backgroundColor: '#FAF9F7',
+                                border: isMe ? '1px solid var(--border-color)' : '1px solid var(--accent-color)',
+                                borderRadius: 'var(--radius-sm)'
+                              }}
+                            >
+                              <div style={{ 
+                                fontSize: '0.7rem', 
+                                fontWeight: '700', 
+                                color: isMe ? 'var(--text-secondary)' : 'var(--accent-color)',
+                                textTransform: 'uppercase',
+                                marginBottom: '2px'
+                              }}>
+                                {isMe ? 'You' : name}
+                              </div>
+                              <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+                                {choiceText}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Next Prompt Control */}
+                      <button 
+                        onClick={handleNextIcebreaker} 
+                        className="btn btn-primary"
+                        style={{ width: '100%' }}
+                      >
+                        Next Prompt
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Canvas container */}
-        <div style={{ 
-          position: 'relative', 
-          width: '100%', 
-          backgroundColor: '#FFFFFF',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius-sm)',
-          overflow: 'hidden',
-          aspectRatio: '3/2',
-          touchAction: 'none'
-        }}>
-          <canvas
-            ref={canvasRef}
-            width={600}
-            height={400}
-            onMouseDown={handleStartDrawing}
-            onMouseMove={handleDrawing}
-            onMouseUp={handleStopDrawing}
-            onMouseLeave={handleStopDrawing}
-            onTouchStart={handleStartDrawing}
-            onTouchMove={handleDrawing}
-            onTouchEnd={handleStopDrawing}
-            style={{
-              display: 'block',
-              width: '100%',
-              height: '100%',
-              cursor: 'crosshair'
-            }}
-          />
-        </div>
-
-        {/* Clear Button */}
-        <button
-          onClick={handleClearCanvas}
-          className="btn"
-          style={{
-            width: '100%',
-            marginTop: '16px',
-            padding: '8px 12px',
-            fontSize: '0.8125rem',
-            color: '#EF4444',
-            backgroundColor: 'transparent',
-            border: '1px solid #FCA5A5'
-          }}
-        >
-          Clear Canvas
-        </button>
-      </div>
-
-      {/* Music Card */}
-      <div className="card card-left">
-        <h2>Music</h2>
-        
-        {/* Upload Form */}
-        <div className="form-group mt-3">
-          <label className="form-label">Upload Song (MP3/WAV, max 15MB)</label>
-          {isUploading ? (
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Uploading...</div>
-          ) : (
-            <input
-              type="file"
-              accept=".mp3,.wav,audio/mpeg,audio/wav"
-              onChange={handleFileUpload}
-              className="input-text"
-            />
-          )}
-          {uploadError && <div style={{ color: '#EF4444', fontSize: '0.875rem', marginTop: '4px' }}>{uploadError}</div>}
-        </div>
-
-        {/* Songs List */}
-        <div style={{ marginTop: '24px' }}>
-          <h3 className="mb-2">Shared Songs</h3>
-          {isSongsLoading ? (
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Loading songs...</p>
-          ) : songs.length === 0 ? (
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>No songs uploaded yet.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
-              {songs.map((song) => {
-                const isSelected = currentSong && currentSong._id === song._id;
-                return (
-                  <div
-                    key={song._id}
+          {/* Whiteboard Card */}
+          <div className="feature-card card-accent-whiteboard">
+            <h2>Whiteboard <span style={{ fontSize: '0.75rem', color: '#2ECC71', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Canvas</span></h2>
+            
+            {/* Controls: Brush Presets & Width */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              gap: '12px',
+              marginBottom: '16px',
+              flexWrap: 'wrap'
+            }}>
+              {/* Preset Colors */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {['#1A1A1A', '#E8623F', '#4A90E2', '#2ECC71', '#F1C40F', '#9B59B6'].map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setBrushColor(color)}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 12px',
-                      border: isSelected ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius)',
-                      backgroundColor: isSelected ? '#F3F4F6' : 'white'
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: color,
+                      border: brushColor === color ? '2px solid #FFFFFF' : '1px solid var(--border-color)',
+                      boxShadow: brushColor === color ? '0 0 0 2px var(--accent-color)' : 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      transition: 'all 0.15s ease'
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Size Preset controls */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Size:</span>
+                {[
+                  { label: 'S', size: 2 },
+                  { label: 'M', size: 5 },
+                  { label: 'L', size: 12 }
+                ].map((preset) => (
+                  <button
+                    key={preset.size}
+                    onClick={() => setBrushWidth(preset.size)}
+                    className="btn"
+                    style={{
+                      width: 'auto',
+                      padding: '2px 8px',
+                      fontSize: '0.7rem',
+                      backgroundColor: brushWidth === preset.size ? 'var(--accent-color)' : 'transparent',
+                      color: brushWidth === preset.size ? 'white' : 'var(--text-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderColor: brushWidth === preset.size ? 'var(--accent-color)' : 'var(--border-color)'
                     }}
                   >
-                    <span style={{
-                      fontSize: '0.875rem',
-                      fontWeight: isSelected ? '600' : '400',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      maxWidth: '220px',
-                      color: isSelected ? 'var(--accent-color)' : 'var(--text-primary)'
-                    }}>
-                      {song.title}
-                    </span>
-                    <button
-                      onClick={() => handleSelectSong(song)}
-                      className="btn"
-                      style={{
-                        width: 'auto',
-                        padding: '4px 10px',
-                        fontSize: '0.75rem',
-                        backgroundColor: isSelected ? 'var(--accent-color)' : 'white',
-                        color: isSelected ? 'white' : 'black',
-                        borderColor: isSelected ? 'var(--accent-color)' : 'var(--border-color)'
-                      }}
-                    >
-                      {isSelected && isPlaying ? 'Playing' : 'Play'}
-                    </button>
-                  </div>
-                );
-              })}
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Custom Audio Controller Panel */}
-        {currentSong && (
-          <div style={{
-            marginTop: '24px',
-            padding: '16px',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius)',
-            backgroundColor: '#FAFAFA'
-          }}>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Now Playing</p>
-            <h4 style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '12px', wordBreak: 'break-all', color: 'var(--text-primary)' }}>
-              {currentSong.title}
-            </h4>
+            {/* Canvas container */}
+            <div style={{ 
+              position: 'relative', 
+              width: '100%', 
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              overflow: 'hidden',
+              aspectRatio: '3/2',
+              touchAction: 'none'
+            }}>
+              <canvas
+                ref={canvasRef}
+                width={600}
+                height={400}
+                onMouseDown={handleStartDrawing}
+                onMouseMove={handleDrawing}
+                onMouseUp={handleStopDrawing}
+                onMouseLeave={handleStopDrawing}
+                onTouchStart={handleStartDrawing}
+                onTouchMove={handleDrawing}
+                onTouchEnd={handleStopDrawing}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: '100%',
+                  cursor: 'crosshair'
+                }}
+              />
+            </div>
 
-            <input
-              type="range"
-              min="0"
-              max={duration || 0}
-              value={currentTime || 0}
-              onChange={handleSeek}
+            {/* Clear Button */}
+            <button
+              onClick={handleClearCanvas}
+              className="btn"
               style={{
                 width: '100%',
-                margin: '8px 0',
-                cursor: 'pointer',
-                accentColor: 'var(--accent-color)'
+                marginTop: '16px',
+                padding: '8px 12px',
+                fontSize: '0.8125rem',
+                color: '#EF4444',
+                backgroundColor: 'transparent',
+                border: '1px solid #FCA5A5'
               }}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-              <span>{formatTime(currentTime)}</span>
-              <span style={{ marginLeft: 'auto' }}>{formatTime(duration)}</span>
-            </div>
-
-            <button
-              onClick={handlePlayPause}
-              className="btn btn-primary"
             >
-              {isPlaying ? 'Pause' : 'Play'}
+              Clear Canvas
             </button>
           </div>
-        )}
-      </div>
 
-      {/* Watch Together Card */}
-      <div className="card card-left">
-        <h2>Watch Together</h2>
-        
-        {/* URL Input Form */}
-        <form onSubmit={handleLoadYtVideo} style={{ marginTop: '16px' }}>
-          <div className="form-group">
-            <label className="form-label">YouTube Link or Video ID</label>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <input
-                type="text"
-                placeholder="Paste link here..."
-                value={ytUrl}
-                onChange={(e) => setYtUrl(e.target.value)}
-                className="input-text"
-                style={{ flex: 1 }}
-              />
-              <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>
-                Load
-              </button>
+          {/* Music Card */}
+          <div className="feature-card card-accent-music">
+            <h2>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></h2>
+            
+            {/* Upload Form */}
+            <div className="form-group mt-2">
+              <label className="form-label">Upload Song (MP3/WAV, max 15MB)</label>
+              {isUploading ? (
+                <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Uploading...</div>
+              ) : (
+                <input
+                  type="file"
+                  accept=".mp3,.wav,audio/mpeg,audio/wav"
+                  onChange={handleFileUpload}
+                  className="input-text"
+                  style={{ padding: '8px 12px' }}
+                />
+              )}
+              {uploadError && <div style={{ color: '#EF4444', fontSize: '0.8125rem', marginTop: '4px' }}>{uploadError}</div>}
             </div>
-            {ytError && (
-              <div style={{ color: '#EF4444', fontSize: '0.875rem', marginTop: '4px' }}>
-                {ytError}
+
+            {/* Songs List */}
+            <div style={{ marginTop: '16px' }}>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Shared Songs</h3>
+              {isSongsLoading ? (
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Loading songs...</p>
+              ) : songs.length === 0 ? (
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>No songs uploaded yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '160px', overflowY: 'auto' }}>
+                  {songs.map((song) => {
+                    const isSelected = currentSong && currentSong._id === song._id;
+                    return (
+                      <div
+                        key={song._id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          border: isSelected ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius)',
+                          backgroundColor: isSelected ? '#F3F4F6' : 'white'
+                        }}
+                      >
+                        <span style={{
+                          fontSize: '0.8125rem',
+                          fontWeight: isSelected ? '600' : '400',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: '180px',
+                          color: isSelected ? 'var(--accent-color)' : 'var(--text-primary)'
+                        }}>
+                          {song.title}
+                        </span>
+                        <button
+                          onClick={() => handleSelectSong(song)}
+                          className="btn"
+                          style={{
+                            width: 'auto',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            backgroundColor: isSelected ? 'var(--accent-color)' : 'white',
+                            color: isSelected ? 'white' : 'black',
+                            borderColor: isSelected ? 'var(--accent-color)' : 'var(--border-color)'
+                          }}
+                        >
+                          {isSelected && isPlaying ? 'Playing' : 'Play'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Custom Audio Controller Panel */}
+            {currentSong && (
+              <div style={{
+                marginTop: '16px',
+                padding: '16px',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius)',
+                backgroundColor: '#FAFAFA'
+              }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Now Playing</p>
+                <h4 style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '12px', wordBreak: 'break-all', color: 'var(--text-primary)' }}>
+                  {currentSong.title}
+                </h4>
+
+                <input
+                  type="range"
+                  min="0"
+                  max={duration || 0}
+                  value={currentTime || 0}
+                  onChange={handleSeek}
+                  style={{
+                    width: '100%',
+                    margin: '8px 0',
+                    cursor: 'pointer',
+                    accentColor: 'var(--accent-color)'
+                  }}
+                />
+
+                <div style={{ display: 'flex', justifycontent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                  <span>{formatTime(currentTime)}</span>
+                  <span style={{ marginLeft: 'auto' }}>{formatTime(duration)}</span>
+                </div>
+
+                <button
+                  onClick={handlePlayPause}
+                  className="btn btn-primary"
+                >
+                  {isPlaying ? 'Pause' : 'Play'}
+                </button>
               </div>
             )}
           </div>
-        </form>
 
-        {/* Player Container */}
-        {currentVideoId ? (
-          <div className="youtube-container" style={{ marginTop: '20px' }}>
-            <div id="youtube-player"></div>
+          {/* Watch Together Card */}
+          <div className="feature-card card-accent-watch">
+            <h2>Watch Together <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 'bold', textTransform: 'uppercase' }}>Sync Video</span></h2>
+            
+            {/* URL Input Form */}
+            <form onSubmit={handleLoadYtVideo} style={{ marginTop: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">YouTube Link or Video ID</label>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Paste link here..."
+                    value={ytUrl}
+                    onChange={(e) => setYtUrl(e.target.value)}
+                    className="input-text"
+                    style={{ flex: 1, padding: '8px 12px' }}
+                  />
+                  <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>
+                    Load
+                  </button>
+                </div>
+                {ytError && (
+                  <div style={{ color: '#EF4444', fontSize: '0.8125rem', marginTop: '4px' }}>
+                    {ytError}
+                  </div>
+                )}
+              </div>
+            </form>
+
+            {/* Player Container */}
+            {currentVideoId ? (
+              <div className="youtube-container" style={{ marginTop: '16px' }}>
+                <div id="youtube-player"></div>
+              </div>
+            ) : (
+              <div style={{ 
+                marginTop: '16px', 
+                padding: '32px 16px', 
+                textAlign: 'center', 
+                border: '1px dashed var(--border-color)', 
+                borderRadius: 'var(--radius)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.8125rem'
+              }}>
+                No video loaded. Enter a YouTube link above to start watching together.
+              </div>
+            )}
           </div>
-        ) : (
-          <div style={{ 
-            marginTop: '20px', 
-            padding: '40px 20px', 
-            textAlign: 'center', 
-            border: '1px dashed var(--border-color)', 
-            borderRadius: 'var(--radius)',
-            color: 'var(--text-secondary)',
-            fontSize: '0.875rem'
-          }}>
-            No video loaded. Enter a YouTube link above to start watching together.
-          </div>
-        )}
+        </div>
+
       </div>
     </div>
   );
