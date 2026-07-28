@@ -25,7 +25,7 @@ function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        // token aur user details ko login function me pass kr rhe hai
+        
         login(data.token, data.user);
 
         // agar user already paired hai to direct home page pr bhejenge
