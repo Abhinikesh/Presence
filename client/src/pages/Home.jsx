@@ -19,18 +19,18 @@ const BG_PALETTE = [
   { label: 'Midnight',     value: '#1C1F26' },
 ];
 
-// ── Card colour palette ─────────────────────────────────
+// ── Card colour palette (medium tones — readable text) ──────────
 const CARD_PALETTE = [
-  { label: 'White',        value: '#FFFFFF' },
-  { label: 'Snow',         value: '#F8F8F8' },
-  { label: 'Blush Tint',   value: '#FEF3F0' },
-  { label: 'Lavender Tint',value: '#F5F2FD' },
-  { label: 'Sky Tint',     value: '#EFF6FF' },
-  { label: 'Sage Tint',    value: '#F0F7F1' },
-  { label: 'Peach Tint',   value: '#FFF7F0' },
-  { label: 'Mint Tint',    value: '#ECFDF5' },
-  { label: 'Rose Tint',    value: '#FDF2F8' },
-  { label: 'Powder Tint',  value: '#F0F9FF' },
+  { label: 'White',         value: '#FFFFFF' },
+  { label: 'Sky Blue',      value: '#BAE6FD' },
+  { label: 'Lavender',      value: '#C4B5FD' },
+  { label: 'Sage Green',    value: '#86EFAC' },
+  { label: 'Peach',         value: '#FCA5A5' },
+  { label: 'Blush Pink',    value: '#F9A8D4' },
+  { label: 'Amber',         value: '#FCD34D' },
+  { label: 'Teal',          value: '#5EEAD4' },
+  { label: 'Lilac',         value: '#E9D5FF' },
+  { label: 'Coral',         value: '#FDBA74' },
 ];
 
 // ── Inline Settings gear icon (no emoji) ──────────────────────
