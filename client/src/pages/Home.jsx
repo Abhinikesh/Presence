@@ -1030,9 +1030,37 @@ function Home() {
 
   useEffect(() => {
     if (!activePing) return;
-    const timer = setTimeout(() => {
-      setActivePing(null);
-    }, 3500);
+
+    // Play a pleasant chime via Web Audio API
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const playTone = (freq, start, duration, gain = 0.35) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+        gainNode.gain.setValueAtTime(0, ctx.currentTime + start);
+        gainNode.gain.linearRampToValueAtTime(gain, ctx.currentTime + start + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + duration);
+      };
+      if (activePing.type === 'heart') {
+        playTone(880, 0, 0.4);
+        playTone(1100, 0.15, 0.5);
+      } else if (activePing.type === 'wave') {
+        playTone(660, 0, 0.3);
+        playTone(880, 0.12, 0.3);
+        playTone(1046, 0.24, 0.45);
+      } else {
+        playTone(528, 0, 0.3);
+        playTone(660, 0.2, 0.4);
+      }
+    } catch (e) { /* Audio not available */ }
+
+    const timer = setTimeout(() => setActivePing(null), 5000);
     return () => clearTimeout(timer);
   }, [activePing]);
 
@@ -1938,39 +1966,74 @@ function Home() {
         </div>
       )}
 
-      {activePing && (
-        <div
-          onClick={handleDismissPing}
-          style={{
-            position: 'fixed',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 1000,
-            width: '90%',
-            maxWidth: '360px',
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E5E7EB',
-            borderLeft: '4px solid #2563EB',
-            borderRadius: '6px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-            padding: '12px 16px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            animation: 'slideDown 0.3s ease-out'
-          }}
-        >
-          <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#111111' }}>
-            {activePing.fromName} sent you {
-              activePing.type === 'heart' ? 'a heart' :
-              activePing.type === 'wave' ? 'a wave' : 'a thinking of you'
-            }
-          </span>
-          <span style={{ fontSize: '0.75rem', color: '#6B7280', marginLeft: '12px' }}>Dismiss</span>
-        </div>
-      )}
+      {activePing && (() => {
+        const PING_CONFIG = {
+          heart:    { emoji: '❤️',  label: 'sent you a heart',         gradient: 'linear-gradient(135deg,#FF6B9D,#FF3D71)', glow: 'rgba(255,61,113,0.5)' },
+          wave:     { emoji: '👋',  label: 'is waving at you!',        gradient: 'linear-gradient(135deg,#FF9F43,#FF6348)', glow: 'rgba(255,99,72,0.5)'  },
+          thinking: { emoji: '💭',  label: 'is thinking of you…',      gradient: 'linear-gradient(135deg,#A29BFE,#6C5CE7)', glow: 'rgba(108,92,231,0.5)'},
+        };
+        const cfg = PING_CONFIG[activePing.type] || PING_CONFIG.heart;
+        return (
+          <div
+            onClick={handleDismissPing}
+            style={{
+              position: 'fixed', inset: 0,
+              zIndex: 9999,
+              background: 'rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              animation: 'pingOverlayIn 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+              cursor: 'pointer',
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: cfg.gradient,
+                borderRadius: '28px',
+                padding: '48px 56px',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px',
+                boxShadow: `0 0 80px ${cfg.glow}, 0 24px 60px rgba(0,0,0,0.25)`,
+                animation: 'pingCardPop 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+                maxWidth: '340px', width: '90%',
+                position: 'relative',
+              }}
+            >
+              {/* Big emoji */}
+              <span style={{
+                fontSize: '96px',
+                lineHeight: 1,
+                filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.25))',
+                animation: 'pingEmojiBounce 0.8s cubic-bezier(0.34,1.56,0.64,1)',
+                display: 'block',
+              }}>{cfg.emoji}</span>
+
+              {/* Sender name */}
+              <span style={{
+                fontSize: '1.5rem', fontWeight: 800,
+                color: '#FFFFFF',
+                textShadow: '0 2px 12px rgba(0,0,0,0.25)',
+                textAlign: 'center',
+              }}>{activePing.fromName}</span>
+
+              {/* Message */}
+              <span style={{
+                fontSize: '1.1rem', fontWeight: 500,
+                color: 'rgba(255,255,255,0.92)',
+                textAlign: 'center',
+              }}>{cfg.label}</span>
+
+              {/* Dismiss hint */}
+              <span style={{
+                fontSize: '0.78rem',
+                color: 'rgba(255,255,255,0.65)',
+                marginTop: '8px',
+              }}>Tap anywhere to close</span>
+            </div>
+          </div>
+        );
+      })()}
 
       <audio
         ref={audioRef}
