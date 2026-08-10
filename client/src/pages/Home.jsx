@@ -1200,24 +1200,50 @@ function Home() {
     try {
       const response = await fetch(`${BACKEND_URL}/api/songs/upload`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
-
       const data = await response.json();
-
       if (response.ok) {
         await fetchSongs();
         e.target.value = null;
+        setUploadError('');
       } else {
         setUploadError(data.error || 'Upload failed.');
+        e.target.value = null;
+        // Auto-clear error after 6 seconds
+        setTimeout(() => setUploadError(''), 6000);
       }
     } catch (err) {
       setUploadError('Network error uploading file.');
+      setTimeout(() => setUploadError(''), 6000);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDeleteSong = async (song) => {
+    // Only uploader can delete
+    if (song.uploadedBy !== user?._id && song.uploadedBy?._id !== user?._id) return;
+    // Stop playback if this song is playing
+    if (currentSong && currentSong._id === song._id) {
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
+      setCurrentSong(null);
+      setIsPlaying(false);
+    }
+    // Optimistic remove
+    setSongs(prev => prev.filter(s => s._id !== song._id));
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/songs/${song._id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        // Restore on failure
+        setSongs(prev => [song, ...prev].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      }
+    } catch {
+      setSongs(prev => [song, ...prev].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
     }
   };
 
@@ -3500,53 +3526,81 @@ function Home() {
             </div>
 
             <div style={{ marginTop: '16px' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>Shared Songs</h3>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                Shared Songs ({songs.length})
+              </h3>
               {isSongsLoading ? (
                 <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Loading songs...</p>
               ) : songs.length === 0 ? (
                 <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>No songs uploaded yet.</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '160px', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
                   {songs.map((song) => {
                     const isSelected = currentSong && currentSong._id === song._id;
+                    const isOwner = song.uploadedBy === user?._id ||
+                                   song.uploadedBy?._id === user?._id ||
+                                   song.uploadedBy?.toString() === user?._id?.toString();
                     return (
                       <div
                         key={song._id}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
+                          gap: '8px',
                           padding: '8px 12px',
                           border: isSelected ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
                           borderRadius: 'var(--radius)',
-                          backgroundColor: isSelected ? '#F3F4F6' : 'white'
+                          backgroundColor: isSelected ? '#F0FDFA' : 'white',
+                          transition: 'all 0.15s',
                         }}
                       >
+                        {/* Song icon */}
+                        <span style={{ fontSize: '1rem', flexShrink: 0 }}>{isSelected && isPlaying ? '🎵' : '🎶'}</span>
+
+                        {/* Title */}
                         <span style={{
                           fontSize: '0.8125rem',
                           fontWeight: isSelected ? '600' : '400',
+                          flex: 1,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          maxWidth: '180px',
                           color: isSelected ? 'var(--accent-color)' : 'var(--text-primary)'
                         }}>
                           {song.title}
                         </span>
+
+                        {/* Play button */}
                         <button
                           onClick={() => handleSelectSong(song)}
                           className="btn"
                           style={{
-                            width: 'auto',
-                            padding: '4px 10px',
-                            fontSize: '0.75rem',
-                            backgroundColor: isSelected ? 'var(--accent-color)' : 'white',
-                            color: isSelected ? 'white' : 'black',
+                            width: 'auto', padding: '3px 10px',
+                            fontSize: '0.75rem', flexShrink: 0,
+                            backgroundColor: isSelected ? 'var(--accent-color)' : 'transparent',
+                            color: isSelected ? 'white' : 'var(--text-secondary)',
                             borderColor: isSelected ? 'var(--accent-color)' : 'var(--border-color)'
                           }}
                         >
                           {isSelected && isPlaying ? 'Playing' : 'Play'}
                         </button>
+
+                        {/* Delete button — only for uploader */}
+                        {isOwner && (
+                          <button
+                            onClick={() => handleDeleteSong(song)}
+                            title="Delete song"
+                            style={{
+                              background: 'none', border: '1px solid transparent',
+                              cursor: 'pointer', color: '#D1D5DB',
+                              fontSize: '0.8rem', padding: '3px 6px',
+                              borderRadius: '5px', flexShrink: 0,
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.borderColor = '#FECACA'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#D1D5DB'; e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = 'transparent'; }}
+                          >✕</button>
+                        )}
                       </div>
                     );
                   })}

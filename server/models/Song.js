@@ -6,6 +6,13 @@ const songSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  normalizedTitle: {
+    type: String,
+    default: '',
+    trim: true,
+    lowercase: true,
+    index: true
+  },
   fileUrl: {
     type: String,
     required: true,
