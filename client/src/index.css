@@ -1305,8 +1305,8 @@ h3 {
   color: var(--text-primary);
   line-height: 1.45;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   cursor: grab;
   transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
   word-break: break-word;
@@ -1326,34 +1326,68 @@ h3 {
   z-index: 9999;
 }
 
-/* Card text area (click to edit inline) */
+/* Card text */
 .kanban-card-text {
   flex: 1;
-  cursor: text;
+  cursor: pointer;
   min-width: 0;
 }
 
-.kanban-card-text:focus {
-  outline: none;
+/* Actions row — move arrows + delete */
+.kanban-card-actions {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  margin-top: 2px;
 }
 
-/* Delete button on card */
+.kanban-card:hover .kanban-card-actions {
+  opacity: 1;
+}
+
+.kanban-move-btn {
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #6B7280;
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  transition: all 0.15s;
+  line-height: 1.4;
+}
+
+.kanban-move-btn:hover {
+  background: #E5E7EB;
+  color: #374151;
+}
+
+.kanban-move-forward {
+  background: #ECFDF5;
+  border-color: #6EE7B7;
+  color: #059669;
+  font-weight: 600;
+}
+
+.kanban-move-forward:hover {
+  background: #D1FAE5;
+  color: #047857;
+}
+
+/* Delete button */
 .kanban-card-delete {
-  flex-shrink: 0;
+  margin-left: auto;
   background: none;
   border: none;
   cursor: pointer;
   color: #D1D5DB;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   line-height: 1;
-  padding: 1px 3px;
+  padding: 2px 5px;
   border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-
-.kanban-card:hover .kanban-card-delete {
-  opacity: 1;
+  transition: color 0.15s, background 0.15s;
 }
 
 .kanban-card-delete:hover {

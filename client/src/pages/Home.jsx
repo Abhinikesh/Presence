@@ -212,7 +212,7 @@ function Home() {
   }, [durationMinutes]);
 
   const [kanbanCards, setKanbanCards] = useState({ todo: [], in_progress: [], done: [] });
-  const [kanbanNewText, setKanbanNewText] = useState('');
+  const [kanbanNewText, setKanbanNewText] = useState({ todo: '', in_progress: '', done: '' });
   const [kanbanEditingId, setKanbanEditingId] = useState(null);
   const [kanbanEditText, setKanbanEditText] = useState('');
 
@@ -548,39 +548,15 @@ function Home() {
       setIcebreakerStatus('reveal');
     });
 
-    socket.on('kanban_card_created', (card) => {
-      setKanbanCards(prev => ({
-        ...prev,
-        [card.column]: [...prev[card.column], card].sort((a, b) => a.position - b.position)
-      }));
+    socket.on('kanban_board_refresh', (board) => {
+      setKanbanCards(board);
     });
 
-    socket.on('kanban_card_moved', (card) => {
-      setKanbanCards(prev => {
-        const next = { todo: [], in_progress: [], done: [] };
-        ['todo', 'in_progress', 'done'].forEach(col => {
-          next[col] = prev[col].filter(c => c._id !== card._id);
-        });
-        next[card.column] = [...next[card.column], card].sort((a, b) => a.position - b.position);
-        return next;
-      });
-    });
-
-    socket.on('kanban_card_updated', (card) => {
-      setKanbanCards(prev => {
-        const next = { ...prev };
-        next[card.column] = prev[card.column].map(c => c._id === card._id ? card : c);
-        return next;
-      });
-    });
-
-    socket.on('kanban_card_deleted', ({ _id }) => {
-      setKanbanCards(prev => ({
-        todo: prev.todo.filter(c => c._id !== _id),
-        in_progress: prev.in_progress.filter(c => c._id !== _id),
-        done: prev.done.filter(c => c._id !== _id),
-      }));
-    });
+    // Legacy individual event handlers (fallback)
+    socket.on('kanban_card_created', () => fetchKanbanCards());
+    socket.on('kanban_card_moved',   () => fetchKanbanCards());
+    socket.on('kanban_card_updated', () => fetchKanbanCards());
+    socket.on('kanban_card_deleted', () => fetchKanbanCards());
 
     socket.on('note_sync_update', (data) => {
       setPartnerIsTyping(true);
@@ -740,34 +716,28 @@ function Home() {
   const fetchKanbanCards = async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/kanban/cards`, {
+      const res = await fetch(`${BACKEND_URL}/api/kanban/board`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
-        const cards = await res.json();
-        setKanbanCards(groupByColumn(cards));
-      }
+      if (res.ok) setKanbanCards(await res.json());
     } catch (err) {
-      console.error('Error fetching kanban cards:', err);
+      console.error('Error fetching kanban board:', err);
     }
   };
 
-  const handleAddKanbanCard = async () => {
-    const text = kanbanNewText.trim();
+  const handleAddKanbanCard = async (col) => {
+    const text = (kanbanNewText[col] || '').trim();
     if (!text) return;
-    setKanbanNewText('');
+    setKanbanNewText(prev => ({ ...prev, [col]: '' }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/kanban/cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ text, column: 'todo' })
+        body: JSON.stringify({ text, column: col })
       });
       if (res.ok) {
-        const card = await res.json();
-        setKanbanCards(prev => ({
-          ...prev,
-          todo: [...prev.todo, card]
-        }));
+        const { board } = await res.json();
+        setKanbanCards(board);
       }
     } catch (err) {
       console.error('Error adding kanban card:', err);
@@ -775,15 +745,20 @@ function Home() {
   };
 
   const handleDeleteKanbanCard = async (card) => {
+    // Optimistic update
     setKanbanCards(prev => ({
       ...prev,
       [card.column]: prev[card.column].filter(c => c._id !== card._id)
     }));
     try {
-      await fetch(`${BACKEND_URL}/api/kanban/cards/${card._id}`, {
+      const res = await fetch(`${BACKEND_URL}/api/kanban/cards/${card._id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (res.ok) {
+        const { board } = await res.json();
+        setKanbanCards(board);
+      }
     } catch (err) {
       console.error('Error deleting kanban card:', err);
       fetchKanbanCards();
@@ -799,13 +774,47 @@ function Home() {
       [card.column]: prev[card.column].map(c => c._id === card._id ? { ...c, text: newText } : c)
     }));
     try {
-      await fetch(`${BACKEND_URL}/api/kanban/cards/${card._id}/text`, {
+      const res = await fetch(`${BACKEND_URL}/api/kanban/cards/${card._id}/text`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ text: newText })
       });
+      if (res.ok) {
+        const { board } = await res.json();
+        setKanbanCards(board);
+      }
     } catch (err) {
       console.error('Error editing kanban card:', err);
+      fetchKanbanCards();
+    }
+  };
+
+  // Move card one column forward or backward
+  const handleMoveKanbanCard = async (card, direction) => {
+    const cols = ['todo', 'in_progress', 'done'];
+    const idx = cols.indexOf(card.column);
+    const newCol = cols[idx + direction];
+    if (!newCol) return;
+    // Optimistic
+    setKanbanCards(prev => {
+      const next = {
+        todo: [...prev.todo],
+        in_progress: [...prev.in_progress],
+        done: [...prev.done],
+      };
+      next[card.column] = next[card.column].filter(c => c._id !== card._id);
+      next[newCol] = [...next[newCol], { ...card, column: newCol }];
+      return next;
+    });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/kanban/cards/${card._id}/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ column: newCol, position: 9999 })
+      });
+      if (res.ok) setKanbanCards(await res.json());
+    } catch (err) {
+      console.error('Error moving kanban card:', err);
       fetchKanbanCards();
     }
   };
@@ -818,45 +827,26 @@ function Home() {
     const srcCol = source.droppableId;
     const dstCol = destination.droppableId;
 
-    const allCards = { ...kanbanCards };
-    const srcList = Array.from(allCards[srcCol]);
-    const [moved] = srcList.splice(source.index, 1);
-    const dstList = srcCol === dstCol ? srcList : Array.from(allCards[dstCol]);
+    // Optimistic update
+    const allCards = {
+      todo: [...kanbanCards.todo],
+      in_progress: [...kanbanCards.in_progress],
+      done: [...kanbanCards.done],
+    };
+    const [moved] = allCards[srcCol].splice(source.index, 1);
+    const dstList = srcCol === dstCol ? allCards[srcCol] : allCards[dstCol];
     dstList.splice(destination.index, 0, { ...moved, column: dstCol });
-
-    const newState = { ...allCards, [srcCol]: srcList, [dstCol]: dstList };
-    newState[dstCol] = newState[dstCol].map((c, i) => ({ ...c, position: i }));
-    if (srcCol !== dstCol) newState[srcCol] = newState[srcCol].map((c, i) => ({ ...c, position: i }));
-    setKanbanCards(newState);
+    setKanbanCards(allCards);
 
     try {
-      await fetch(`${BACKEND_URL}/api/kanban/cards/${draggableId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/kanban/cards/${draggableId}/move`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ column: dstCol, position: destination.index })
       });
-      const promises = [];
-      newState[dstCol].forEach((c, i) => {
-        if (c._id !== draggableId) {
-          promises.push(fetch(`${BACKEND_URL}/api/kanban/cards/${c._id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ position: i })
-          }));
-        }
-      });
-      if (srcCol !== dstCol) {
-        newState[srcCol].forEach((c, i) => {
-          promises.push(fetch(`${BACKEND_URL}/api/kanban/cards/${c._id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ position: i })
-          }));
-        });
-      }
-      await Promise.all(promises);
+      if (res.ok) setKanbanCards(await res.json());
     } catch (err) {
-      console.error('Error saving kanban reorder:', err);
+      console.error('Error saving kanban drag:', err);
       fetchKanbanCards();
     }
   };
@@ -3694,10 +3684,10 @@ function Home() {
             <DragDropContext onDragEnd={handleKanbanDragEnd}>
               <div className="kanban-board">
                 {[
-                  { id: 'todo', label: 'To Do', dotColor: '#F59E0B' },
-                  { id: 'in_progress', label: 'In Progress', dotColor: '#3B82F6' },
-                  { id: 'done', label: 'Done', dotColor: '#22C55E' }
-                ].map(col => (
+                  { id: 'todo',        label: 'To Do',       dotColor: '#F59E0B', accent: '#FEF3C7' },
+                  { id: 'in_progress', label: 'In Progress', dotColor: '#3B82F6', accent: '#DBEAFE' },
+                  { id: 'done',        label: 'Done',         dotColor: '#22C55E', accent: '#DCFCE7' }
+                ].map((col, colIdx) => (
                   <Droppable droppableId={col.id} key={col.id}>
                     {(provided, snapshot) => (
                       <div
@@ -3705,14 +3695,18 @@ function Home() {
                         ref={provided.innerRef}
                         {...provided.droppableProps}
                       >
+                        {/* Column header */}
                         <div className="kanban-col-header">
                           <span className="kanban-col-title">
                             <span className="kanban-col-dot" style={{ backgroundColor: col.dotColor }} />
                             {col.label}
                           </span>
-                          <span className="kanban-col-count">{kanbanCards[col.id].length}</span>
+                          <span className="kanban-col-count" style={{ background: col.accent, color: col.dotColor }}>
+                            {kanbanCards[col.id].length}
+                          </span>
                         </div>
 
+                        {/* Cards */}
                         <div className="kanban-cards-list">
                           {kanbanCards[col.id].map((card, index) => (
                             <Draggable key={card._id} draggableId={card._id} index={index}>
@@ -3738,16 +3732,37 @@ function Home() {
                                   ) : (
                                     <span
                                       className="kanban-card-text"
-                                      onClick={() => { setKanbanEditingId(card._id); setKanbanEditText(card.text); }}
+                                      onDoubleClick={() => { setKanbanEditingId(card._id); setKanbanEditText(card.text); }}
+                                      title="Double-click to edit"
                                     >
                                       {card.text}
                                     </span>
                                   )}
-                                  <button
-                                    className="kanban-card-delete"
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteKanbanCard(card); }}
-                                    title="Delete"
-                                  >✕</button>
+
+                                  {/* Actions row */}
+                                  <div className="kanban-card-actions">
+                                    {/* Move backward button */}
+                                    {colIdx > 0 && (
+                                      <button
+                                        className="kanban-move-btn"
+                                        onClick={(e) => { e.stopPropagation(); handleMoveKanbanCard(card, -1); }}
+                                        title={`Move to ${colIdx === 1 ? 'To Do' : 'In Progress'}`}
+                                      >←</button>
+                                    )}
+                                    {/* Move forward button */}
+                                    {colIdx < 2 && (
+                                      <button
+                                        className="kanban-move-btn kanban-move-forward"
+                                        onClick={(e) => { e.stopPropagation(); handleMoveKanbanCard(card, 1); }}
+                                        title={`Move to ${colIdx === 0 ? 'In Progress' : 'Done'}`}
+                                      >{colIdx === 1 ? '✓ Done' : '→'}</button>
+                                    )}
+                                    <button
+                                      className="kanban-card-delete"
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteKanbanCard(card); }}
+                                      title="Delete"
+                                    >✕</button>
+                                  </div>
                                 </div>
                               )}
                             </Draggable>
@@ -3755,18 +3770,25 @@ function Home() {
                           {provided.placeholder}
                         </div>
 
-                        {col.id === 'todo' && (
-                          <form className="kanban-add-form" onSubmit={(e) => { e.preventDefault(); handleAddKanbanCard(); }}>
-                            <input
-                              className="kanban-add-input"
-                              value={kanbanNewText}
-                              onChange={(e) => setKanbanNewText(e.target.value)}
-                              placeholder="+ Add a task..."
-                              maxLength={500}
-                            />
-                            <button type="submit" className="kanban-add-btn" disabled={!kanbanNewText.trim()}>Add</button>
-                          </form>
-                        )}
+                        {/* Per-column add form */}
+                        <form
+                          className="kanban-add-form"
+                          onSubmit={(e) => { e.preventDefault(); handleAddKanbanCard(col.id); }}
+                        >
+                          <input
+                            className="kanban-add-input"
+                            value={kanbanNewText[col.id] || ''}
+                            onChange={(e) => setKanbanNewText(prev => ({ ...prev, [col.id]: e.target.value }))}
+                            placeholder="+ Add a task…"
+                            maxLength={500}
+                          />
+                          <button
+                            type="submit"
+                            className="kanban-add-btn"
+                            disabled={!(kanbanNewText[col.id] || '').trim()}
+                            style={{ backgroundColor: col.dotColor, borderColor: col.dotColor }}
+                          >Add</button>
+                        </form>
                       </div>
                     )}
                   </Droppable>
