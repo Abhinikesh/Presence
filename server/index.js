@@ -462,6 +462,10 @@ io.on('connection', async (socket) => {
 
       if (partnerOnline) {
         io.to(partnerInfo.socketId).emit('partner_online', { status: 'Free' });
+        // Also send partner's current activity to newly connected user
+        if (partnerInfo.activity) {
+          socket.emit('partner_activity', partnerInfo.activity);
+        }
       }
     } else {
       socket.emit('partner_status', { online: false });
@@ -514,6 +518,29 @@ io.on('connection', async (socket) => {
       }
     } catch (err) {
       console.error(`Error broadcasting status update or checking notes for user ${userId}:`, err);
+    }
+  });
+
+  // ── Partner Activity Tracking ──────────────────────────────────────────
+  socket.on('user_activity', async (data) => {
+    const { section, emoji, message } = data;
+    try {
+      // Update stored activity for this user
+      const userInfo = onlineUsers.get(userId);
+      if (userInfo) {
+        userInfo.activity = { section, emoji, message };
+        onlineUsers.set(userId, userInfo);
+      }
+      // Relay to partner
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('partner_activity', { section, emoji, message });
+        }
+      }
+    } catch (err) {
+      console.error(`Error relaying user_activity for ${userId}:`, err);
     }
   });
 

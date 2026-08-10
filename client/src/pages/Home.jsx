@@ -57,7 +57,11 @@ function Home() {
   const [partnerName, setPartnerName] = useState('');
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [partnerStatus, setPartnerStatus] = useState('');
+  const [partnerActivity, setPartnerActivity] = useState(null); // { section, emoji, message }
   const [myStatus, setMyStatus] = useState('Free');
+  // Toast notifications
+  const [toasts, setToasts] = useState([]); // [{ id, emoji, text, at }]
+  const toastIdRef = useRef(0);
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const socketRef = useRef(null);
@@ -259,6 +263,54 @@ function Home() {
     fetchSongs();
   }, [token]);
 
+  // ── Toast helpers ──────────────────────────────────────────────────────
+  const showToast = (emoji, text) => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev.slice(-2), { id, emoji, text }]); // max 3
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
+  };
+
+  const dismissToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+  // ── Section Activity — IntersectionObserver ────────────────────────────
+  const SECTIONS = [
+    { id: 'section-whiteboard',   section: 'Whiteboard',    emoji: '🎨', message: 'is drawing something for you' },
+    { id: 'section-music',        section: 'Music',          emoji: '🎵', message: 'is picking a song for you' },
+    { id: 'section-watch',        section: 'Watch Together', emoji: '🎬', message: 'wants to watch something together' },
+    { id: 'section-kanban',       section: 'Kanban',         emoji: '✅', message: 'is organizing tasks for you both' },
+    { id: 'section-notes',        section: 'Shared Notes',   emoji: '📝', message: 'is writing something for you' },
+    { id: 'section-tictactoe',    section: 'Tic Tac Toe',    emoji: '🎮', message: 'wants to play a game' },
+    { id: 'section-hangman',      section: 'Hangman',        emoji: '🔤', message: 'wants to play Hangman' },
+    { id: 'section-timer',        section: 'Study Timer',    emoji: '⏰', message: 'is studying with you' },
+    { id: 'section-icebreaker',   section: 'Icebreaker',     emoji: '💫', message: 'is thinking of a question for you' },
+    { id: 'section-location',     section: 'Location',       emoji: '📍', message: 'is checking where you are' },
+  ];
+
+  const lastEmittedSectionRef = useRef('');
+
+  useEffect(() => {
+    if (!socketRef.current) return;
+    const observers = [];
+
+    SECTIONS.forEach(({ id, section, emoji, message }) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const obs = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting && lastEmittedSectionRef.current !== section) {
+            lastEmittedSectionRef.current = section;
+            socketRef.current?.emit('user_activity', { section, emoji, message });
+          }
+        },
+        { threshold: 0.35 }
+      );
+      obs.observe(el);
+      observers.push(obs);
+    });
+
+    return () => observers.forEach(o => o.disconnect());
+  }, [socketRef.current]);
+
   useEffect(() => {
     if (!token) return;
 
@@ -294,19 +346,41 @@ function Home() {
     socket.on('partner_online', (data) => {
       setPartnerOnline(true);
       setPartnerStatus(data?.status || 'Free');
+      showToast('💕', `${partnerName || 'Your love'} just joined Presence`);
     });
 
     socket.on('partner_offline', () => {
       setPartnerOnline(false);
+      setPartnerActivity(null);
     });
 
     socket.on('partner_status_update', (data) => {
       setPartnerStatus(data.status);
     });
 
-    // Real-time partner name change
-    socket.on('partner_name_update', (data) => {
-      if (data?.name) setPartnerName(data.name);
+    socket.on('partner_activity', (data) => {
+      setPartnerActivity(data);
+    });
+
+    // ── Event-based toasts from partner actions ──────────────────
+    socket.on('kanban_board_refresh', (board) => {
+      setKanbanCards(board);
+      // Show toast only when board has more cards than before (partner added task)
+      setKanbanCards(prev => {
+        const prevCount = (prev.todo?.length || 0) + (prev.in_progress?.length || 0) + (prev.done?.length || 0);
+        const newCount  = (board.todo?.length || 0) + (board.in_progress?.length || 0) + (board.done?.length || 0);
+        if (newCount > prevCount) {
+          setTimeout(() => showToast('✅', `${partnerName || 'Your love'} added a task for you both`), 0);
+        }
+        return board;
+      });
+    });
+
+    socket.on('yt_sync_change_video', ({ videoId }) => {
+      isIncomingSyncRef.current = true;
+      setCurrentVideoId(videoId);
+      try { localStorage.setItem('presence_yt_video', videoId); } catch {}
+      showToast('🎬', `${partnerName || 'Your love'} wants to watch something together`);
     });
 
     socket.on('sync_play', (data) => {
@@ -377,10 +451,7 @@ function Home() {
       });
     });
 
-    socket.on('yt_sync_change_video', (data) => {
-      isIncomingSyncRef.current = true;
-      setCurrentVideoId(data.videoId);
-    });
+    // yt_sync_change_video handled above (with toast notification)
 
     socket.on('yt_sync_play', (data) => {
       isIncomingSyncRef.current = true;
@@ -548,15 +619,17 @@ function Home() {
       setIcebreakerStatus('reveal');
     });
 
-    socket.on('kanban_board_refresh', (board) => {
-      setKanbanCards(board);
-    });
-
+    // kanban_board_refresh handled above (with toast notification)
     // Legacy individual event handlers (fallback)
     socket.on('kanban_card_created', () => fetchKanbanCards());
     socket.on('kanban_card_moved',   () => fetchKanbanCards());
     socket.on('kanban_card_updated', () => fetchKanbanCards());
     socket.on('kanban_card_deleted', () => fetchKanbanCards());
+
+    // Real-time partner name change
+    socket.on('partner_name_update', (data) => {
+      if (data?.name) setPartnerName(data.name);
+    });
 
     socket.on('note_sync_update', (data) => {
       setPartnerIsTyping(true);
@@ -2427,12 +2500,31 @@ function Home() {
           <div className="nav-logo">
             Presence <span className="nav-logo-dot" />
           </div>
-          <div className="partner-status-compact">
+
+          {/* Partner activity pill */}
+          <div className="partner-activity-pill">
             <span className={`dot ${partnerOnline ? 'dot-online' : 'dot-offline'}`} />
-            <span>
-              {partnerName || 'Partner'}: {partnerOnline ? partnerStatus || 'Free' : 'Offline'}
-            </span>
+            {partnerOnline ? (
+              <span className="partner-activity-text">
+                <span className="partner-activity-name">{partnerName || 'Your love'}</span>
+                {partnerActivity ? (
+                  <>
+                    <span className="partner-activity-sep"> · </span>
+                    <span className="partner-activity-emoji">{partnerActivity.emoji}</span>
+                    {' '}
+                    <span className="partner-activity-msg">{partnerActivity.message}</span>
+                  </>
+                ) : (
+                  <span className="partner-activity-sep"> is online 💕</span>
+                )}
+              </span>
+            ) : (
+              <span className="partner-activity-text partner-activity-offline">
+                {partnerName || 'Your love'} is offline
+              </span>
+            )}
           </div>
+
           <button
             className="btn-settings"
             title="Settings"
@@ -2610,7 +2702,7 @@ function Home() {
         </div>
 
         <div className="dashboard-grid">
-          <div className="feature-card card-accent-study" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+          <div id="section-timer" className="feature-card card-accent-study" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Study Room <span style={{ fontSize: '0.75rem', color: '#4A90E2', fontWeight: 'bold', textTransform: 'uppercase' }}>Focus Zone</span></h2>
             
             <div style={{ 
@@ -2767,7 +2859,7 @@ function Home() {
             </div>
           </div>
 
-          <div className="feature-card card-accent-games" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+          <div id="section-tictactoe" className="feature-card card-accent-games" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Games <span style={{ fontSize: '0.75rem', color: '#8B5CF6', fontWeight: 'bold', textTransform: 'uppercase' }}>Play Time</span></h2>
 
             <div className="game-tab-bar">
@@ -3054,7 +3146,7 @@ function Home() {
 
           </div>
 
-          <div className="feature-card card-accent-icebreakers" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+          <div id="section-icebreaker" className="feature-card card-accent-icebreakers" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2>Icebreakers <span style={{ fontSize: '0.75rem', color: '#EC4899', fontWeight: 'bold', textTransform: 'uppercase' }}>Would You Rather</span></h2>
             
             <div style={{ marginTop: '12px' }}>
@@ -3391,7 +3483,7 @@ function Home() {
             )}
           </div>
 
-          <div className="feature-card card-accent-whiteboard" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+          <div id="section-whiteboard" className="feature-card card-accent-whiteboard" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Whiteboard <span style={{ fontSize: '0.75rem', color: '#2ECC71', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Canvas</span></span>
               <button onClick={() => setTheaterMode('whiteboard')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
@@ -3501,7 +3593,7 @@ function Home() {
             </button>
           </div>
 
-          <div className="feature-card card-accent-music" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+          <div id="section-music" className="feature-card card-accent-music" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></span>
               <button onClick={() => setTheaterMode('music')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
@@ -3650,7 +3742,7 @@ function Home() {
             )}
           </div>
 
-          <div className="feature-card card-accent-watch" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+          <div id="section-watch" className="feature-card card-accent-watch" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Watch Together <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 'bold', textTransform: 'uppercase' }}>Sync Video</span></span>
               <button onClick={() => setTheaterMode('watchTogether')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
@@ -3732,7 +3824,7 @@ function Home() {
 
           </div>
 
-          <div className="feature-card card-accent-kanban" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave} style={{ gridColumn: '1 / -1' }}>
+          <div id="section-kanban" className="feature-card card-accent-kanban" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave} style={{ gridColumn: '1 / -1' }}>
             <h2>Kanban Board <span style={{ fontSize: '0.75rem', color: '#14B8A6', fontWeight: 'bold', textTransform: 'uppercase' }}>Shared Tasks</span></h2>
 
             <DragDropContext onDragEnd={handleKanbanDragEnd}>
@@ -3852,6 +3944,7 @@ function Home() {
           </div>
 
           <div
+            id="section-notes"
             className="feature-card card-accent-notes"
             onMouseMove={handleTiltMove}
             onMouseLeave={handleTiltLeave}
@@ -3895,6 +3988,48 @@ function Home() {
         </div>
 
       </div>
+      {/* ── Toast Notifications ──────────────────────────────────── */}
+      {toasts.length > 0 && (
+        <div style={{
+          position: 'fixed', bottom: '24px', right: '24px',
+          zIndex: 99999, display: 'flex', flexDirection: 'column', gap: '10px',
+          pointerEvents: 'none',
+        }}>
+          {toasts.map(t => (
+            <div
+              key={t.id}
+              style={{
+                pointerEvents: 'all',
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '12px 16px',
+                background: 'rgba(255,255,255,0.95)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(236,72,153,0.18)',
+                borderRadius: '14px',
+                boxShadow: '0 8px 30px rgba(236,72,153,0.13), 0 2px 8px rgba(0,0,0,0.08)',
+                minWidth: '220px', maxWidth: '320px',
+                animation: 'toastSlideIn 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+                fontFamily: 'inherit',
+              }}
+            >
+              <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>{t.emoji}</span>
+              <span style={{
+                flex: 1, fontSize: '0.84rem', color: '#374151',
+                fontWeight: '500', lineHeight: 1.4,
+              }}>{t.text}</span>
+              <button
+                onClick={() => dismissToast(t.id)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#9CA3AF', fontSize: '0.9rem', padding: '2px 4px',
+                  lineHeight: 1, flexShrink: 0,
+                }}
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
