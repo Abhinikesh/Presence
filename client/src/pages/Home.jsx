@@ -48,26 +48,52 @@ function Home() {
   const navigate = useNavigate();
   const socketRef = useRef(null);
 
-  // ── Settings state — persisted in localStorage, survives logout ──
+  // ── Settings state — persisted in localStorage + DB ──
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [displayName, setDisplayName] = useState(
     () => localStorage.getItem('presence_displayName') || ''
   );
   const [nameInput, setNameInput] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
   const [bgColor, setBgColor] = useState(
     () => localStorage.getItem('presence_bgColor') || '#FAF9F7'
   );
+
+  // Seed displayName from server (user.displayName) on first load
+  useEffect(() => {
+    if (user?.displayName && !localStorage.getItem('presence_displayName')) {
+      setDisplayName(user.displayName);
+      localStorage.setItem('presence_displayName', user.displayName);
+    }
+  }, [user]);
 
   // Sync displayName → nameInput when drawer opens
   useEffect(() => {
     if (settingsOpen) setNameInput(displayName);
   }, [settingsOpen]);
 
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     const trimmed = nameInput.trim();
     if (!trimmed) return;
+    // Update locally immediately for snappy UX
     setDisplayName(trimmed);
     localStorage.setItem('presence_displayName', trimmed);
+    // Persist to DB and push to partner's browser via socket
+    setNameSaving(true);
+    try {
+      await fetch(`${BACKEND_URL}/api/auth/display-name`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ displayName: trimmed }),
+      });
+    } catch (err) {
+      console.error('Failed to save display name:', err);
+    } finally {
+      setNameSaving(false);
+    }
   };
 
   const handlePickColor = (color) => {
@@ -245,6 +271,11 @@ function Home() {
 
     socket.on('partner_status_update', (data) => {
       setPartnerStatus(data.status);
+    });
+
+    // Real-time partner name change
+    socket.on('partner_name_update', (data) => {
+      if (data?.name) setPartnerName(data.name);
     });
 
     socket.on('sync_play', (data) => {
@@ -1712,8 +1743,8 @@ function Home() {
                     maxLength={24}
                     onKeyDown={e => e.key === 'Enter' && handleSaveName()}
                   />
-                  <button className="settings-save-btn" onClick={handleSaveName}>
-                    Save
+                  <button className="settings-save-btn" onClick={handleSaveName} disabled={nameSaving}>
+                    {nameSaving ? 'Saving…' : 'Save'}
                   </button>
                 </div>
                 {displayName && (

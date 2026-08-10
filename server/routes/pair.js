@@ -41,7 +41,7 @@ router.post('/connect', auth, async (req, res) => {
 
     res.json({
       message: 'Successfully paired!',
-      partner: { id: partner._id, name: partner.name }
+      partner: { id: partner._id, name: partner.displayName || partner.name }
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error during pairing: ' + error.message });
@@ -63,7 +63,7 @@ router.get('/status', auth, async (req, res) => {
       return res.json({ paired: false });
     }
 
-    res.json({ paired: true, partner: { id: partner._id, name: partner.name } });
+    res.json({ paired: true, partner: { id: partner._id, name: partner.displayName || partner.name } });
   } catch (error) {
     res.status(500).json({ error: 'Server error fetching status: ' + error.message });
   }

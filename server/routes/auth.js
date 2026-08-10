@@ -88,6 +88,35 @@ router.get('/me', auth, async (req, res) => {
   res.json(req.user);
 });
 
+// Update display name — saves to DB and pushes socket event to partner
+router.patch('/display-name', auth, async (req, res) => {
+  try {
+    const { displayName } = req.body;
+    if (!displayName || !displayName.trim()) {
+      return res.status(400).json({ error: 'Display name is required' });
+    }
+
+    const trimmed = displayName.trim().slice(0, 30);
+    const user = req.user;
+    user.displayName = trimmed;
+    await user.save();
+
+    // Push real-time update to partner if they are online
+    const io = req.app.get('io');
+    const onlineUsers = req.app.get('onlineUsers');
+    if (io && onlineUsers && user.pairId) {
+      const partnerInfo = onlineUsers.get(user.pairId.toString());
+      if (partnerInfo) {
+        io.to(partnerInfo.socketId).emit('partner_name_update', { name: trimmed });
+      }
+    }
+
+    res.json({ displayName: trimmed });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update display name: ' + error.message });
+  }
+});
+
 // ============================================================
 // DEV-ONLY BYPASS — localhost development shortcut
 // This route is completely disabled in production.
