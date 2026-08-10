@@ -505,26 +505,28 @@ function Home() {
     });
 
     socket.on('canvas_sync_draw', (data) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      ctx.beginPath();
-      ctx.strokeStyle = data.color;
-      ctx.lineWidth = data.lineWidth;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.moveTo(data.prevX * canvas.width, data.prevY * canvas.height);
-      ctx.lineTo(data.x * canvas.width, data.y * canvas.height);
-      ctx.stroke();
-      ctx.closePath();
+      // Draw on card canvas
+      const drawOnCanvas = (canvas) => {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.strokeStyle = data.color;
+        ctx.lineWidth = data.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.moveTo(data.prevX * canvas.width, data.prevY * canvas.height);
+        ctx.lineTo(data.x * canvas.width, data.y * canvas.height);
+        ctx.stroke();
+        ctx.closePath();
+      };
+      drawOnCanvas(canvasRef.current);
+      drawOnCanvas(theaterCanvasRef.current);
     });
 
     socket.on('canvas_sync_clear', () => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+      [canvasRef.current, theaterCanvasRef.current].filter(Boolean).forEach(canvas => {
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+      });
     });
 
     socket.on('icebreaker_new_prompt', (data) => {
@@ -1418,6 +1420,16 @@ function Home() {
     }
   }, [theaterMode]);
 
+  // Lock body scroll when theater is open so background page doesn't scroll
+  useEffect(() => {
+    if (theaterMode) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [theaterMode]);
+
   useEffect(() => {
     return () => {
       if (ytPlayerRef.current && ytPlayerRef.current.destroy) {
@@ -1656,18 +1668,14 @@ function Home() {
   };
 
   const handleStartDrawing = (e) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (e.touches) e.preventDefault();
 
-    if (e.touches) {
-      e.preventDefault();
-    }
-    
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY ?? (e.touches && e.touches[0].clientY);
     if (clientX === undefined || clientY === undefined) return;
 
-    const rect = canvas.getBoundingClientRect();
+    // Use the element that received the event for accurate coordinates
+    const rect = e.currentTarget.getBoundingClientRect();
     const x = (clientX - rect.left) / rect.width;
     const y = (clientY - rect.top) / rect.height;
 
@@ -1677,18 +1685,14 @@ function Home() {
 
   const handleDrawing = (e) => {
     if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (e.touches) e.preventDefault();
 
-    if (e.touches) {
-      e.preventDefault();
-    }
-
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY ?? (e.touches && e.touches[0].clientY);
     if (clientX === undefined || clientY === undefined) return;
 
-    const rect = canvas.getBoundingClientRect();
+    // Use the element that received the event for accurate coordinates
+    const rect = e.currentTarget.getBoundingClientRect();
     const x = (clientX - rect.left) / rect.width;
     const y = (clientY - rect.top) / rect.height;
 
@@ -2126,37 +2130,58 @@ function Home() {
 
             {/* ─── WHITEBOARD ─── */}
             {theaterMode === 'whiteboard' && (
-              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {['#FFFFFF','#1A1A1A','#E8623F','#4A90E2','#2ECC71','#F1C40F','#9B59B6','#EF4444'].map(c => (
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', flex: 1, gap: '16px',
+              }}>
+                {/* Controls bar */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  width: '100%', maxWidth: '960px', flexWrap: 'wrap', gap: '10px',
+                  background: 'rgba(255,255,255,0.06)', borderRadius: '12px',
+                  padding: '10px 16px', border: '1px solid rgba(255,255,255,0.09)',
+                }}>
+                  {/* Color swatches */}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {['#1A1A1A','#FFFFFF','#E8623F','#4A90E2','#2ECC71','#F1C40F','#9B59B6','#EF4444'].map(c => (
                       <button key={c} onClick={() => setBrushColor(c)} style={{
-                        width: '28px', height: '28px', borderRadius: '50%', backgroundColor: c, padding: 0,
-                        border: brushColor === c ? '3px solid rgba(255,255,255,0.9)' : '1px solid rgba(255,255,255,0.25)',
+                        width: '26px', height: '26px', borderRadius: '50%', backgroundColor: c, padding: 0,
+                        border: brushColor === c ? '3px solid rgba(255,255,255,0.95)' : '1px solid rgba(255,255,255,0.2)',
                         boxShadow: brushColor === c ? '0 0 0 2px #E8623F' : 'none',
-                        cursor: 'pointer', transition: 'all 0.15s',
+                        cursor: 'pointer', flexShrink: 0, transition: 'all 0.15s',
                       }}/>
                     ))}
                   </div>
+                  {/* Size + Clear */}
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>Size:</span>
+                    <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginRight: '2px' }}>Size:</span>
                     {[{l:'S',s:2},{l:'M',s:5},{l:'L',s:12},{l:'XL',s:20}].map(p => (
                       <button key={p.s} onClick={() => setBrushWidth(p.s)} style={{
                         padding: '3px 10px', fontSize: '0.72rem', borderRadius: '6px', cursor: 'pointer',
                         background: brushWidth === p.s ? '#E8623F' : 'rgba(255,255,255,0.08)',
-                        color: brushWidth === p.s ? '#fff' : 'rgba(255,255,255,0.6)',
-                        border: '1px solid rgba(255,255,255,0.12)',
+                        color: brushWidth === p.s ? '#fff' : 'rgba(255,255,255,0.55)',
+                        border: `1px solid ${brushWidth === p.s ? '#E8623F' : 'rgba(255,255,255,0.1)'}`,
+                        transition: 'all 0.15s',
                       }}>{p.l}</button>
                     ))}
                     <button onClick={handleClearCanvas} style={{
-                      padding: '3px 14px', fontSize: '0.72rem', borderRadius: '6px', cursor: 'pointer', marginLeft: '6px',
-                      background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)',
+                      padding: '3px 14px', fontSize: '0.72rem', borderRadius: '6px',
+                      cursor: 'pointer', marginLeft: '8px',
+                      background: 'rgba(239,68,68,0.15)', color: '#FCA5A5',
+                      border: '1px solid rgba(239,68,68,0.3)',
                     }}>Clear</button>
                   </div>
                 </div>
+
+                {/* Canvas frame — centered, fixed aspect ratio */}
                 <div style={{
-                  flex: 1, backgroundColor: '#FFFFFF', borderRadius: '10px',
-                  overflow: 'hidden', minHeight: '60vh', touchAction: 'none', position: 'relative',
+                  width: '100%', maxWidth: '960px',
+                  borderRadius: '14px', overflow: 'hidden',
+                  boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: '#fff',
+                  touchAction: 'none',
+                  aspectRatio: '3/2',
                 }}>
                   <canvas
                     ref={theaterCanvasRef}
