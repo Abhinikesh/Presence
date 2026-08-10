@@ -745,7 +745,6 @@ h3 {
   border-color: var(--accent-color);
   background: #FFF8F6;
   box-shadow: 0 2px 8px rgba(232,98,63,0.12);
-  transform: rotate(22deg);
 }
 
 /* ── Settings Drawer ─────────────────────────────────────── */
