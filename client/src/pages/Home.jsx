@@ -2353,32 +2353,14 @@ function Home() {
                   }}>Load</button>
                 </form>
                 {ytError && <div style={{ color: '#FCA5A5', fontSize: '0.8rem', alignSelf: 'flex-start', maxWidth: '960px', width: '100%' }}>{ytError}</div>}
-
-                {/* Centered iframe – no reinit needed, starts at saved time */}
-                {currentVideoId ? (
-                  <div style={{
-                    width: '100%', maxWidth: '960px',
-                    aspectRatio: '16/9',
-                    borderRadius: '14px', overflow: 'hidden',
-                    boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    background: '#000',
-                  }}>
-                    <iframe
-                      key={currentVideoId}
-                      src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&start=${window._ytTheaterStartTime || 0}&rel=0&modestbranding=1&enablejsapi=0`}
-                      style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                      allow="autoplay; encrypted-media; picture-in-picture"
-                      allowFullScreen
-                      title="Watch Together"
-                    />
-                  </div>
-                ) : (
+                {/* NOTE: The actual YT player is rendered in the card below and CSS-lifted here.
+                    This keeps the YT API player alive so socket play/pause/seek sync works. */}
+                {!currentVideoId && (
                   <div style={{
                     width: '100%', maxWidth: '960px', aspectRatio: '16/9',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     borderRadius: '14px', border: '1px dashed rgba(255,255,255,0.15)',
-                    color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem',
+                    color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem', gap: '10px',
                   }}>
                     🎬 Paste a YouTube link above to start watching together
                   </div>
@@ -3656,24 +3638,37 @@ function Home() {
               </div>
             </form>
 
-            {/* Card player – always rendered so YT API stays active for socket sync */}
-            <div style={{ marginTop: '16px' }}>
+            {/* Card player – always mounted so YT API stays alive for socket sync.
+                When theater is active, CSS-lifts it to float on top of the overlay. */}
+            <div style={{ marginTop: theaterMode === 'watchTogether' ? 0 : '16px' }}>
               {currentVideoId ? (
                 <div
-                  className="youtube-container"
-                  style={{
-                    position: 'relative',
-                    width: '100%',
-                    aspectRatio: '16/9',
-                    borderRadius: '10px',
-                    overflow: 'hidden',
-                    background: '#000',
-                    // Hide visually when theater is open but keep it mounted so YT API works
-                    opacity: theaterMode === 'watchTogether' ? 0 : 1,
-                    pointerEvents: theaterMode === 'watchTogether' ? 'none' : 'auto',
-                    height: theaterMode === 'watchTogether' ? 0 : undefined,
-                    overflow: theaterMode === 'watchTogether' ? 'hidden' : 'hidden',
-                  }}
+                  style={
+                    theaterMode === 'watchTogether'
+                      ? {
+                          // Float into theater: above overlay (z 8000), centered
+                          position: 'fixed',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          width: 'min(920px, 92vw)',
+                          aspectRatio: '16/9',
+                          zIndex: 8001,
+                          borderRadius: '14px',
+                          overflow: 'hidden',
+                          boxShadow: '0 8px 40px rgba(0,0,0,0.85)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          background: '#000',
+                        }
+                      : {
+                          position: 'relative',
+                          width: '100%',
+                          aspectRatio: '16/9',
+                          borderRadius: '10px',
+                          overflow: 'hidden',
+                          background: '#000',
+                        }
+                  }
                 >
                   <div id="youtube-player" style={{ position: 'absolute', inset: 0 }} />
                 </div>
