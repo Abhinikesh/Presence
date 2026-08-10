@@ -5,18 +5,32 @@ import { io } from 'socket.io-client';
 import { BACKEND_URL } from '../config';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-// ── BG colour palette ──────────────────────────────────────────
+// ── Background colour palette (9 light + 1 dark) ───────────────
 const BG_PALETTE = [
   { label: 'Warm White',   value: '#FAF9F7' },
   { label: 'Blush',        value: '#FDE8E1' },
   { label: 'Lavender',     value: '#EDE8F5' },
   { label: 'Sage',         value: '#E6F0E8' },
-  { label: 'Sky',          value: '#E1EEF7' },
+  { label: 'Sky Blue',     value: '#DBEAFE' },
   { label: 'Peach',        value: '#FFF0E5' },
-  { label: 'Slate',        value: '#1C1F26' },
-  { label: 'Charcoal',     value: '#22272E' },
-  { label: 'Deep Navy',    value: '#0F1624' },
-  { label: 'Forest',       value: '#1A2B1A' },
+  { label: 'Mint',         value: '#D1FAE5' },
+  { label: 'Rose',         value: '#FCE7F3' },
+  { label: 'Powder Blue',  value: '#E0F2FE' },
+  { label: 'Midnight',     value: '#1C1F26' },
+];
+
+// ── Card colour palette ─────────────────────────────────
+const CARD_PALETTE = [
+  { label: 'White',        value: '#FFFFFF' },
+  { label: 'Snow',         value: '#F8F8F8' },
+  { label: 'Blush Tint',   value: '#FEF3F0' },
+  { label: 'Lavender Tint',value: '#F5F2FD' },
+  { label: 'Sky Tint',     value: '#EFF6FF' },
+  { label: 'Sage Tint',    value: '#F0F7F1' },
+  { label: 'Peach Tint',   value: '#FFF7F0' },
+  { label: 'Mint Tint',    value: '#ECFDF5' },
+  { label: 'Rose Tint',    value: '#FDF2F8' },
+  { label: 'Powder Tint',  value: '#F0F9FF' },
 ];
 
 // ── Inline Settings gear icon (no emoji) ──────────────────────
@@ -58,6 +72,14 @@ function Home() {
   const [bgColor, setBgColor] = useState(
     () => localStorage.getItem('presence_bgColor') || '#FAF9F7'
   );
+  const [cardColor, setCardColor] = useState(
+    () => localStorage.getItem('presence_cardColor') || '#FFFFFF'
+  );
+
+  const handlePickCardColor = (color) => {
+    setCardColor(color);
+    localStorage.setItem('presence_cardColor', color);
+  };
 
   // Seed displayName from server (user.displayName) on first load
   useEffect(() => {
@@ -1701,11 +1723,17 @@ function Home() {
     setTimeout(() => card.classList.remove('tilt-reset'), 500);
   };
 
-  // Detect dark bg for text-on-bg contrast
-  const isDarkBg = ['#1C1F26','#22272E','#0F1624','#1A2B1A'].includes(bgColor);
+  const isDarkBg = ['#1C1F26'].includes(bgColor);
 
   return (
-    <div className="home-wrapper" style={{ backgroundColor: bgColor, color: isDarkBg ? '#F0F0F0' : undefined }}>
+    <div
+      className="home-wrapper"
+      style={{
+        backgroundColor: bgColor,
+        color: isDarkBg ? '#F0F0F0' : undefined,
+        '--card-bg': cardColor,
+      }}
+    >
       {/* Blobs only look good on light backgrounds */}
       {!isDarkBg && <div className="bg-grain" />}
 
@@ -1774,6 +1802,25 @@ function Home() {
                       className={`settings-color-swatch ${bgColor === value ? 'active' : ''}`}
                       style={{ backgroundColor: value }}
                       onClick={() => handlePickColor(value)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Card Color */}
+              <div className="settings-section">
+                <span className="settings-section-label">Card Color</span>
+                <p style={{ fontSize: '0.78rem', color: isDarkBg ? 'rgba(255,255,255,0.5)' : 'var(--text-secondary)', marginTop: '-4px' }}>
+                  Applies to all cards & panels
+                </p>
+                <div className="settings-color-grid">
+                  {CARD_PALETTE.map(({ label, value }) => (
+                    <button
+                      key={value}
+                      title={label}
+                      className={`settings-color-swatch ${cardColor === value ? 'active' : ''}`}
+                      style={{ backgroundColor: value, border: value === '#FFFFFF' || value === '#F8F8F8' ? '1px solid #E5E5E5' : undefined }}
+                      onClick={() => handlePickCardColor(value)}
                     />
                   ))}
                 </div>
