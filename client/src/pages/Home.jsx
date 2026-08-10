@@ -3319,7 +3319,12 @@ function Home() {
           </div>
 
           <div className="feature-card card-accent-whiteboard" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
-            <h2>Whiteboard <span style={{ fontSize: '0.75rem', color: '#2ECC71', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Canvas</span></h2>
+            <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Whiteboard <span style={{ fontSize: '0.75rem', color: '#2ECC71', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Canvas</span></span>
+              <button onClick={() => setTheaterMode('whiteboard')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              </button>
+            </h2>
             
             <div style={{ 
               display: 'flex', 
@@ -3424,7 +3429,12 @@ function Home() {
           </div>
 
           <div className="feature-card card-accent-music" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
-            <h2>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></h2>
+            <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></span>
+              <button onClick={() => setTheaterMode('music')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              </button>
+            </h2>
             
             <div className="form-group mt-2">
               <label className="form-label">Upload Song (MP3/WAV, max 15MB)</label>
@@ -3540,7 +3550,12 @@ function Home() {
           </div>
 
           <div className="feature-card card-accent-watch" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
-            <h2>Watch Together <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 'bold', textTransform: 'uppercase' }}>Sync Video</span></h2>
+            <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Watch Together <span style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 'bold', textTransform: 'uppercase' }}>Sync Video</span></span>
+              <button onClick={() => setTheaterMode('watchTogether')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              </button>
+            </h2>
             
             <form onSubmit={handleLoadYtVideo} style={{ marginTop: '12px' }}>
               <div className="form-group">
@@ -3566,7 +3581,7 @@ function Home() {
               </div>
             </form>
 
-            {currentVideoId ? (
+            {currentVideoId && theaterMode !== 'watchTogether' ? (
               <div className="youtube-container" style={{ marginTop: '16px' }}>
                 <div id="youtube-player"></div>
               </div>
@@ -3678,11 +3693,13 @@ function Home() {
             onMouseLeave={handleTiltLeave}
             style={{ gridColumn: '1 / -1' }}
           >
-            <h2 style={{ marginBottom: '4px' }}>
-              📝 Shared Notes{' '}
-              <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                Live Synced
+            <h2 style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>📝 Shared Notes{' '}
+                <span style={{ fontSize: '0.75rem', color: '#D97706', fontWeight: 'bold', textTransform: 'uppercase' }}>Live Synced</span>
               </span>
+              <button onClick={() => setTheaterMode('sharedNotes')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              </button>
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
               A shared space for both of you — thoughts, to-dos, anything. Last write wins.

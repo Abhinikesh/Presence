@@ -1903,3 +1903,15 @@ h3 {
   75%  { transform: scale(0.9) rotate(-4deg); }
   100% { transform: scale(1) rotate(0deg); }
 }
+
+/* ── Theater Mode ────────────────────────────────────────────── */
+@keyframes theaterFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Music equalizer bars animation */
+@keyframes musicBar {
+  from { transform: scaleY(0.3); }
+  to   { transform: scaleY(1); }
+}
