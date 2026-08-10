@@ -5,17 +5,17 @@ import { io } from 'socket.io-client';
 import { BACKEND_URL } from '../config';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
-// ── Background colour palette (9 light + 1 dark) ───────────────
+// ── Background colour palette (medium tones) ────────────────────
 const BG_PALETTE = [
   { label: 'Warm White',   value: '#FAF9F7' },
-  { label: 'Blush',        value: '#FDE8E1' },
-  { label: 'Lavender',     value: '#EDE8F5' },
-  { label: 'Sage',         value: '#E6F0E8' },
-  { label: 'Sky Blue',     value: '#DBEAFE' },
-  { label: 'Peach',        value: '#FFF0E5' },
-  { label: 'Mint',         value: '#D1FAE5' },
-  { label: 'Rose',         value: '#FCE7F3' },
-  { label: 'Powder Blue',  value: '#E0F2FE' },
+  { label: 'Sky Blue',     value: '#BAE6FD' },
+  { label: 'Lavender',     value: '#C4B5FD' },
+  { label: 'Sage Green',   value: '#86EFAC' },
+  { label: 'Blush Pink',   value: '#F9A8D4' },
+  { label: 'Peach',        value: '#FDBA74' },
+  { label: 'Amber',        value: '#FCD34D' },
+  { label: 'Teal',         value: '#5EEAD4' },
+  { label: 'Lilac',        value: '#E9D5FF' },
   { label: 'Midnight',     value: '#1C1F26' },
 ];
 
