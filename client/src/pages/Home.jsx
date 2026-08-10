@@ -150,7 +150,10 @@ function Home() {
 
   const [ytUrl, setYtUrl] = useState('');
   const [ytError, setYtError] = useState('');
-  const [currentVideoId, setCurrentVideoId] = useState('');
+  // Initialize from localStorage so video survives refresh
+  const [currentVideoId, setCurrentVideoId] = useState(() => {
+    try { return localStorage.getItem('presence_yt_video') || ''; } catch { return ''; }
+  });
 
   const [shareLocation, setShareLocation] = useState(false);
   const [distanceApart, setDistanceApart] = useState(null);
@@ -931,6 +934,12 @@ function Home() {
           }
         }
 
+        // Restore YouTube video after refresh
+        if (data.ytVideoId && data.ytVideoId.trim()) {
+          setCurrentVideoId(data.ytVideoId.trim());
+          try { localStorage.setItem('presence_yt_video', data.ytVideoId.trim()); } catch {}
+        }
+
         if (data.ticTacToeScore) {
           const { user1Wins, user2Wins, draws } = data.ticTacToeScore;
           const myId = String(user._id);
@@ -1323,7 +1332,15 @@ function Home() {
     }
 
     setCurrentVideoId(videoId);
-    
+    // Persist to localStorage immediately
+    try { localStorage.setItem('presence_yt_video', videoId); } catch {}
+    // Persist to DB so it survives refresh for both users
+    fetch(`${BACKEND_URL}/api/pair-state/yt-video`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ ytVideoId: videoId })
+    }).catch(() => {});
+
     if (socketRef.current) {
       socketRef.current.emit('yt_change_video', { videoId });
     }
@@ -1410,13 +1427,11 @@ function Home() {
         dst.getContext('2d').drawImage(src, 0, 0, dst.width, dst.height);
       }
     }
-    // YouTube: reinit player when location changes (card ↔ theater)
-    if ((wasWatch !== isWatch) && currentVideoId) {
-      const savedTime = ytPlayerRef.current?.getCurrentTime?.() || 0;
-      if (ytPlayerRef.current?.destroy) { ytPlayerRef.current.destroy(); ytPlayerRef.current = null; }
-      setTimeout(() => setYtPlayerKey(k => k + 1), 200);
-      // stash saved time so initPlayer can use it
-      window._ytSavedTime = Math.floor(savedTime);
+    // YouTube theater: save current playback time so iframe can start from there
+    if (theaterMode === 'watchTogether' && ytPlayerRef.current?.getCurrentTime) {
+      window._ytTheaterStartTime = Math.floor(ytPlayerRef.current.getCurrentTime());
+    } else if (theaterMode !== 'watchTogether') {
+      window._ytTheaterStartTime = 0;
     }
   }, [theaterMode]);
 
@@ -2313,26 +2328,61 @@ function Home() {
 
             {/* ─── WATCH TOGETHER ─── */}
             {theaterMode === 'watchTogether' && (
-              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <form onSubmit={handleLoadYtVideo} style={{ display: 'flex', gap: '10px' }}>
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', flex: 1, gap: '16px',
+              }}>
+                {/* URL bar */}
+                <form onSubmit={handleLoadYtVideo} style={{
+                  display: 'flex', gap: '10px', width: '100%', maxWidth: '960px',
+                  background: 'rgba(255,255,255,0.06)', borderRadius: '12px',
+                  padding: '10px 14px', border: '1px solid rgba(255,255,255,0.09)',
+                }}>
                   <input
                     type="text" placeholder="Paste YouTube link here…"
                     value={ytUrl} onChange={e => setYtUrl(e.target.value)}
                     style={{
-                      flex: 1, padding: '10px 16px', borderRadius: '8px', fontSize: '0.875rem',
+                      flex: 1, padding: '8px 14px', borderRadius: '8px', fontSize: '0.875rem',
                       background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)',
                       color: '#fff', outline: 'none',
                     }}
                   />
                   <button type="submit" style={{
-                    padding: '10px 20px', borderRadius: '8px', background: '#EF4444',
-                    color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700,
+                    padding: '8px 20px', borderRadius: '8px', background: '#EF4444',
+                    color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, flexShrink: 0,
                   }}>Load</button>
                 </form>
-                {ytError && <div style={{ color: '#FCA5A5', fontSize: '0.8rem' }}>{ytError}</div>}
-                <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', background: '#000', minHeight: '60vh' }}>
-                  <div id="youtube-player" style={{ width: '100%', height: '100%' }}/>
-                </div>
+                {ytError && <div style={{ color: '#FCA5A5', fontSize: '0.8rem', alignSelf: 'flex-start', maxWidth: '960px', width: '100%' }}>{ytError}</div>}
+
+                {/* Centered iframe – no reinit needed, starts at saved time */}
+                {currentVideoId ? (
+                  <div style={{
+                    width: '100%', maxWidth: '960px',
+                    aspectRatio: '16/9',
+                    borderRadius: '14px', overflow: 'hidden',
+                    boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: '#000',
+                  }}>
+                    <iframe
+                      key={currentVideoId}
+                      src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&start=${window._ytTheaterStartTime || 0}&rel=0&modestbranding=1&enablejsapi=0`}
+                      style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                      allow="autoplay; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                      title="Watch Together"
+                    />
+                  </div>
+                ) : (
+                  <div style={{
+                    width: '100%', maxWidth: '960px', aspectRatio: '16/9',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: '14px', border: '1px dashed rgba(255,255,255,0.15)',
+                    color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem',
+                  }}>
+                    🎬 Paste a YouTube link above to start watching together
+                  </div>
+                )}
               </div>
             )}
 
@@ -3606,23 +3656,41 @@ function Home() {
               </div>
             </form>
 
-            {currentVideoId && theaterMode !== 'watchTogether' ? (
-              <div className="youtube-container" style={{ marginTop: '16px' }}>
-                <div id="youtube-player"></div>
-              </div>
-            ) : (
-              <div style={{ 
-                marginTop: '16px', 
-                padding: '32px 16px', 
-                textAlign: 'center', 
-                border: '1px dashed var(--border-color)', 
-                borderRadius: 'var(--radius)',
-                color: 'var(--text-secondary)',
-                fontSize: '0.8125rem'
-              }}>
-                No video loaded. Enter a YouTube link above to start watching together.
-              </div>
-            )}
+            {/* Card player – always rendered so YT API stays active for socket sync */}
+            <div style={{ marginTop: '16px' }}>
+              {currentVideoId ? (
+                <div
+                  className="youtube-container"
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    aspectRatio: '16/9',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    background: '#000',
+                    // Hide visually when theater is open but keep it mounted so YT API works
+                    opacity: theaterMode === 'watchTogether' ? 0 : 1,
+                    pointerEvents: theaterMode === 'watchTogether' ? 'none' : 'auto',
+                    height: theaterMode === 'watchTogether' ? 0 : undefined,
+                    overflow: theaterMode === 'watchTogether' ? 'hidden' : 'hidden',
+                  }}
+                >
+                  <div id="youtube-player" style={{ position: 'absolute', inset: 0 }} />
+                </div>
+              ) : (
+                <div style={{
+                  padding: '32px 16px',
+                  textAlign: 'center',
+                  border: '1px dashed var(--border-color)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.8125rem'
+                }}>
+                  No video loaded. Enter a YouTube link above to start watching together.
+                </div>
+              )}
+            </div>
+
           </div>
 
           <div className="feature-card card-accent-kanban" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave} style={{ gridColumn: '1 / -1' }}>

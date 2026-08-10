@@ -43,6 +43,22 @@ router.patch('/whiteboard', auth, async (req, res) => {
   }
 });
 
+router.patch('/yt-video', auth, async (req, res) => {
+  try {
+    const pairId = getPairKey(req.user);
+    if (!pairId) return res.status(400).json({ error: 'Not paired.' });
+    const { ytVideoId } = req.body;
+    const pairState = await PairState.findOneAndUpdate(
+      { pairId },
+      { ytVideoId: ytVideoId || '', updatedAt: Date.now() },
+      { new: true, upsert: true }
+    );
+    res.json(pairState);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error saving YT video: ' + error.message });
+  }
+});
+
 router.patch('/timer', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);

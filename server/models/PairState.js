@@ -11,6 +11,10 @@ const pairStateSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  ytVideoId: {
+    type: String,
+    default: ''
+  },
   ticTacToeScore: {
     user1Wins: { type: Number, default: 0 },
     user2Wins: { type: Number, default: 0 },
