@@ -1214,8 +1214,8 @@ function Home() {
       }
     } catch (e) { /* Audio not available */ }
 
-    const timer = setTimeout(() => setActivePing(null), 5000);
-    return () => clearTimeout(timer);
+    // No auto-dismiss — stays until recipient taps anywhere
+    // (Audio chime plays on arrival)
   }, [activePing]);
 
   const handleSendPing = (type) => {
@@ -2219,7 +2219,6 @@ function Home() {
             }}
           >
             <div
-              onClick={e => e.stopPropagation()}
               style={{
                 background: cfg.gradient,
                 borderRadius: '28px',
@@ -2260,7 +2259,7 @@ function Home() {
                 fontSize: '0.78rem',
                 color: 'rgba(255,255,255,0.65)',
                 marginTop: '8px',
-              }}>Tap anywhere to close</span>
+              }}>Tap anywhere to close 💕</span>
             </div>
           </div>
         );
