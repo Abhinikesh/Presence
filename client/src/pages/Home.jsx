@@ -5,6 +5,39 @@ import { io } from 'socket.io-client';
 import { BACKEND_URL } from '../config';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
+// ── BG colour palette ──────────────────────────────────────────
+const BG_PALETTE = [
+  { label: 'Warm White',   value: '#FAF9F7' },
+  { label: 'Blush',        value: '#FDE8E1' },
+  { label: 'Lavender',     value: '#EDE8F5' },
+  { label: 'Sage',         value: '#E6F0E8' },
+  { label: 'Sky',          value: '#E1EEF7' },
+  { label: 'Peach',        value: '#FFF0E5' },
+  { label: 'Slate',        value: '#1C1F26' },
+  { label: 'Charcoal',     value: '#22272E' },
+  { label: 'Deep Navy',    value: '#0F1624' },
+  { label: 'Forest',       value: '#1A2B1A' },
+];
+
+// ── Inline Settings gear icon (no emoji) ──────────────────────
+function GearIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06
+        a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09
+        A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06
+        A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09
+        A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06
+        A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09
+        a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06
+        A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09
+        a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 function Home() {
   const { user, token, logout, setUser } = useAuth();
   const [partnerName, setPartnerName] = useState('');
@@ -14,6 +47,36 @@ function Home() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const socketRef = useRef(null);
+
+  // ── Settings state — persisted in localStorage, survives logout ──
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [displayName, setDisplayName] = useState(
+    () => localStorage.getItem('presence_displayName') || ''
+  );
+  const [nameInput, setNameInput] = useState('');
+  const [bgColor, setBgColor] = useState(
+    () => localStorage.getItem('presence_bgColor') || '#FAF9F7'
+  );
+
+  // Sync displayName → nameInput when drawer opens
+  useEffect(() => {
+    if (settingsOpen) setNameInput(displayName);
+  }, [settingsOpen]);
+
+  const handleSaveName = () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) return;
+    setDisplayName(trimmed);
+    localStorage.setItem('presence_displayName', trimmed);
+  };
+
+  const handlePickColor = (color) => {
+    setBgColor(color);
+    localStorage.setItem('presence_bgColor', color);
+  };
+
+  // Resolve the name to show: custom > first word of google name
+  const shownName = displayName || (user?.name ? user.name.split(' ')[0] : '');
 
   const [activePing, setActivePing] = useState(null);
   const [sentStatus, setSentStatus] = useState({ heart: false, wave: false, thinking: false });
@@ -1601,17 +1664,107 @@ function Home() {
     setTimeout(() => card.classList.remove('tilt-reset'), 500);
   };
 
-  return (
-    <div className="home-wrapper">
-      <div className="bg-grain" />
+  // Detect dark bg for text-on-bg contrast
+  const isDarkBg = ['#1C1F26','#22272E','#0F1624','#1A2B1A'].includes(bgColor);
 
-      <div className="bg-blobs-premium">
-        <div className="blob-coral" />
-        <div className="blob-purple" />
-        <div className="blob-yellow" />
-        <div className="blob-teal" />
-        <div className="blob-rose" />
-      </div>
+  return (
+    <div className="home-wrapper" style={{ backgroundColor: bgColor, color: isDarkBg ? '#F0F0F0' : undefined }}>
+      {/* Blobs only look good on light backgrounds */}
+      {!isDarkBg && <div className="bg-grain" />}
+
+      {!isDarkBg && (
+        <div className="bg-blobs-premium">
+          <div className="blob-coral" />
+          <div className="blob-purple" />
+          <div className="blob-yellow" />
+          <div className="blob-teal" />
+          <div className="blob-rose" />
+        </div>
+      )}
+
+      {/* ── Settings Drawer ──────────────────────────────── */}
+      {settingsOpen && (
+        <>
+          <div className="settings-overlay" onClick={() => setSettingsOpen(false)} />
+          <div className="settings-drawer">
+            <div className="settings-drawer-header">
+              <span className="settings-drawer-title">Settings</span>
+              <button className="settings-drawer-close" onClick={() => setSettingsOpen(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="settings-drawer-body">
+
+              {/* Display Name */}
+              <div className="settings-section">
+                <span className="settings-section-label">Display Name</span>
+                <p style={{ fontSize: '0.78rem', color: isDarkBg ? 'rgba(255,255,255,0.5)' : 'var(--text-secondary)', marginTop: '-4px' }}>
+                  Shown instead of your Google name
+                </p>
+                <div className="settings-name-row">
+                  <input
+                    className="settings-name-input"
+                    type="text"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    placeholder={user?.name?.split(' ')[0] || 'Your name'}
+                    maxLength={24}
+                    onKeyDown={e => e.key === 'Enter' && handleSaveName()}
+                  />
+                  <button className="settings-save-btn" onClick={handleSaveName}>
+                    Save
+                  </button>
+                </div>
+                {displayName && (
+                  <p style={{ fontSize: '0.75rem', color: '#7A9471', marginTop: '-4px' }}>
+                    Showing as "{displayName}"
+                  </p>
+                )}
+              </div>
+
+              {/* Background Color */}
+              <div className="settings-section">
+                <span className="settings-section-label">Background Color</span>
+                <p style={{ fontSize: '0.78rem', color: isDarkBg ? 'rgba(255,255,255,0.5)' : 'var(--text-secondary)', marginTop: '-4px' }}>
+                  Stays saved — even after logout
+                </p>
+                <div className="settings-color-grid">
+                  {BG_PALETTE.map(({ label, value }) => (
+                    <button
+                      key={value}
+                      title={label}
+                      className={`settings-color-swatch ${bgColor === value ? 'active' : ''}`}
+                      style={{ backgroundColor: value }}
+                      onClick={() => handlePickColor(value)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div style={{ borderTop: `1px solid ${isDarkBg ? 'rgba(255,255,255,0.1)' : 'var(--border-color)'}` }} />
+
+              {/* Logout */}
+              <div className="settings-section">
+                <button
+                  className="settings-logout-btn"
+                  onClick={() => { logout(); navigate('/'); }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  Sign Out
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </>
+      )}
 
       {activeNote && (
         <div style={{
@@ -1753,8 +1906,13 @@ function Home() {
               {partnerName || 'Partner'}: {partnerOnline ? partnerStatus || 'Free' : 'Offline'}
             </span>
           </div>
-          <button onClick={handleLogout} className="btn-logout-compact">
-            Logout
+          <button
+            className="btn-settings"
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open settings"
+          >
+            <GearIcon size={17} />
           </button>
         </div>
       </nav>
@@ -1763,7 +1921,7 @@ function Home() {
         
         <div className="home-hero-strip">
           <h1 className="hero-greeting">
-            Hey {user.name.split(' ')[0] || user.name}, <span className="partner-name">{partnerName || 'your partner'}</span> is {partnerOnline ? partnerStatus || 'Free' : 'Offline'} 🌙
+            Hey {shownName}, <span className="partner-name">{partnerName || 'your partner'}</span> is {partnerOnline ? partnerStatus || 'Free' : 'Offline'} 🌙
           </h1>
           <div className="hero-distance-line">
             {partnerOnline && distanceApart && (

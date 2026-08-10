@@ -88,4 +88,49 @@ router.get('/me', auth, async (req, res) => {
   res.json(req.user);
 });
 
+// ============================================================
+// DEV-ONLY BYPASS — localhost development shortcut
+// This route is completely disabled in production.
+// ============================================================
+if (process.env.NODE_ENV !== 'production') {
+  router.post('/dev-login', async (req, res) => {
+    try {
+      const DEV_GOOGLE_ID = 'dev_local_bypass_user';
+      let user = await User.findOne({ googleId: DEV_GOOGLE_ID });
+
+      if (!user) {
+        const pairCode = await generateUniquePairCode();
+        user = new User({
+          googleId: DEV_GOOGLE_ID,
+          name: 'Dev User',
+          email: 'dev@localhost.dev',
+          profilePicture: '',
+          pairCode,
+        });
+        await user.save();
+      }
+
+      const jwtToken = jwt.sign(
+        { id: user._id, userId: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      res.json({
+        token: jwtToken,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          profilePicture: user.profilePicture,
+          pairCode: user.pairCode,
+          pairId: user.pairId,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Dev login failed: ' + error.message });
+    }
+  });
+}
+
 module.exports = router;

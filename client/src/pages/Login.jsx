@@ -4,8 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { BACKEND_URL } from '../config';
 
+// Only show dev bypass on localhost
+const IS_LOCAL_DEV = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+
 function Login() {
   const [error, setError] = useState('');
+  const [devLoading, setDevLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -44,6 +48,28 @@ function Login() {
 
   const handleGoogleError = () => {
     setError('Google Sign-In failed. Please try again.');
+  };
+
+  const handleDevLogin = async () => {
+    setDevLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/dev-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        login(data.token, data.user);
+        navigate(data.user.pairId ? '/home' : '/pair');
+      } else {
+        setError(data.error || 'Dev login failed.');
+      }
+    } catch (err) {
+      setError('Network error during dev login.');
+    } finally {
+      setDevLoading(false);
+    }
   };
 
   return (
@@ -108,6 +134,35 @@ function Login() {
                 useOneTap={false}
               />
             </div>
+
+            {IS_LOCAL_DEV && (
+              <div style={{ marginTop: '12px' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  marginBottom: '10px', color: '#B0AEA8'
+                }}>
+                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }} />
+                  <span style={{ fontSize: '0.72rem', fontWeight: '600', letterSpacing: '0.04em', textTransform: 'uppercase' }}>or dev bypass</span>
+                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }} />
+                </div>
+                <button
+                  onClick={handleDevLogin}
+                  disabled={devLoading}
+                  style={{
+                    width: '100%', padding: '9px 16px',
+                    backgroundColor: devLoading ? '#f0ede9' : '#1A1A1A',
+                    color: devLoading ? '#999' : '#FFFFFF',
+                    border: '1px dashed #555',
+                    borderRadius: '8px', fontSize: '0.82rem',
+                    fontWeight: '600', cursor: devLoading ? 'not-allowed' : 'pointer',
+                    letterSpacing: '0.02em', transition: 'all 0.2s',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {devLoading ? 'Signing in...' : '🛠 Dev Login (localhost only)'}
+                </button>
+              </div>
+            )}
           </div>
 
           <p style={{ fontSize: '0.75rem', color: '#B0AEA8', marginTop: '12px' }}>
