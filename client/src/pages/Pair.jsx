@@ -49,7 +49,9 @@ function Pair() {
 
       if (response.ok) {
         if (user) {
-          setUser({ ...user, pairId: data.partner.id });
+          const updatedUser = { ...user, pairId: data.partner.id };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
         }
         navigate('/home');
       } else {

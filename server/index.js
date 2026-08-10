@@ -1140,7 +1140,7 @@ io.on('connection', async (socket) => {
 
         const revealPayload = {
           choices: { [userId]: game.answers[userId], [partnerId]: game.answers[partnerId] },
-          names: { [userId]: currentUser ? currentUser.name : 'You', [partnerId]: partnerUser ? partnerUser.name : 'Partner' },
+          names: { [userId]: currentUser ? (currentUser.displayName || currentUser.name) : 'You', [partnerId]: partnerUser ? (partnerUser.displayName || partnerUser.name) : 'Partner' },
           isMatch,
           matchCount: game.matchCount,
           totalCount: game.totalCount,
