@@ -327,7 +327,10 @@ function Home() {
       if (targetSong) {
         setCurrentSong(targetSong);
         if (audioRef.current) {
-          audioRef.current.src = `${BACKEND_URL}${targetSong.fileUrl}`;
+          const src = targetSong.fileUrl?.startsWith('http')
+            ? targetSong.fileUrl
+            : `${BACKEND_URL}${targetSong.fileUrl}`;
+          audioRef.current.src = src;
           audioRef.current.play()
             .then(() => setIsPlaying(true))
             .catch(e => console.error('Audio play error:', e));
@@ -1059,7 +1062,10 @@ function Home() {
     setCurrentSong(song);
     setIsPlaying(true);
     if (audioRef.current) {
-      audioRef.current.src = `${BACKEND_URL}${song.fileUrl}`;
+      const src = song.fileUrl?.startsWith('http')
+        ? song.fileUrl
+        : `${BACKEND_URL}${song.fileUrl}`;
+      audioRef.current.src = src;
       audioRef.current.currentTime = 0;
       audioRef.current.play()
         .then(() => {
