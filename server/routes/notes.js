@@ -66,7 +66,7 @@ router.get('/pending', auth, async (req, res) => {
       return res.json({
         id: note._id,
         message: note.message,
-        fromName: partnerUser ? partnerUser.name : 'Your partner'
+        fromName: partnerUser ? (partnerUser.displayName || partnerUser.name) : 'Your partner'
       });
     }
 

@@ -438,11 +438,21 @@ io.use((socket, next) => {
 // Jab bhi koi user connect hota hai
 io.on('connection', async (socket) => {
   const userId = socket.userId;
+  // Temporarily set with socketId; name will be filled below after DB fetch
   onlineUsers.set(userId, { socketId: socket.id, status: 'Free' });
   console.log(`User connected: ${userId} (Socket: ${socket.id})`);
 
   try {
     const user = await User.findById(userId);
+    // Update entry with displayName so in-memory fromName is always current
+    if (user) {
+      onlineUsers.set(userId, {
+        socketId: socket.id,
+        status: 'Free',
+        name: user.displayName || user.name,
+      });
+    }
+
     if (user && user.pairId) {
       const partnerId = user.pairId.toString();
       const partnerInfo = onlineUsers.get(partnerId);
@@ -495,7 +505,7 @@ io.on('connection', async (socket) => {
             fromName = partnerInfo.name;
           } else {
             const partnerUser = await User.findById(user.pairId);
-            if (partnerUser) fromName = partnerUser.name;
+            if (partnerUser) fromName = partnerUser.displayName || partnerUser.name;
           }
           socket.emit('note_delivered', { id: pendingNote._id, message: pendingNote.message, fromName });
           pendingNote.delivered = true;
@@ -568,7 +578,7 @@ io.on('connection', async (socket) => {
       if (user && user.pairId) {
         const partnerInfo = onlineUsers.get(user.pairId.toString());
         if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('receive_ping', { type, fromName: user.name });
+          io.to(partnerInfo.socketId).emit('receive_ping', { type, fromName: user.displayName || user.name });
         }
       }
     } catch (err) {
