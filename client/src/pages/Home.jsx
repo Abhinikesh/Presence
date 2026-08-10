@@ -274,44 +274,68 @@ function Home() {
 
   const dismissToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
-  // ── Section Activity — IntersectionObserver ────────────────────────────
-  const SECTIONS = [
-    { id: 'section-timer',      section: 'Study Room',    emoji: '⏰', message: 'is studying with you ❤️' },
-    { id: 'section-tictactoe', section: 'Games',          emoji: '🎮', message: 'wants to play a game with you' },
-    { id: 'section-icebreaker',section: 'Icebreakers',    emoji: '💫', message: 'is thinking of a question for you' },
-    { id: 'section-desire',    section: 'Desire Meet',    emoji: '🔥', message: 'wants to play Desire Meet with you 💕' },
-    { id: 'section-whiteboard',section: 'Whiteboard',     emoji: '🎨', message: 'is drawing something for you' },
-    { id: 'section-music',     section: 'Music',          emoji: '🎵', message: 'is picking a song for you' },
-    { id: 'section-watch',     section: 'Watch Together', emoji: '🎬', message: 'wants to watch something together' },
-    { id: 'section-kanban',    section: 'Kanban',         emoji: '✅', message: 'is organizing tasks for you both' },
-    { id: 'section-notes',     section: 'Shared Notes',   emoji: '📝', message: 'is writing something for you' },
+  // ── Activity Emission ─────────────────────────────────────────────────
+  // All activity labels — used both by direct action calls and scroll fallback
+  const ACTIVITY_MAP = {
+    'timer':       { section: 'Study Room',      emoji: '\u23f0', message: 'is studying with you \u2764\ufe0f' },
+    'tictactoe':   { section: 'Tic-Tac-Toe',     emoji: '\u274c', message: 'is playing Tic-Tac-Toe with you \ud83c\udfae' },
+    'hangman':     { section: 'Hangman',          emoji: '\ud83d\udd24', message: 'is playing Hangman with you \ud83d\udd24' },
+    'icebreaker':  { section: 'Icebreakers',      emoji: '\ud83d\udcab', message: 'is answering an icebreaker with you \ud83d\udcab' },
+    'desire':      { section: 'Desire Meet',      emoji: '\ud83d\udd25', message: 'wants to play Desire Meet with you \ud83d\udc95' },
+    'whiteboard':  { section: 'Whiteboard',       emoji: '\ud83c\udfa8', message: 'is drawing something for you \ud83c\udfa8' },
+    'music':       { section: 'Music',            emoji: '\ud83c\udfb5', message: 'is listening to music with you \ud83c\udfb5' },
+    'watch':       { section: 'Watch Together',   emoji: '\ud83c\udfac', message: 'is watching a video with you \ud83c\udfac' },
+    'kanban':      { section: 'Kanban',           emoji: '\u2705', message: 'is adding tasks for you both \u2705' },
+    'notes':       { section: 'Shared Notes',     emoji: '\ud83d\udcdd', message: 'is writing something for you \ud83d\udcdd' },
+  };
+
+  const lastEmittedSectionRef   = useRef('');
+  const activityDebounceRef     = useRef(null);
+  const lastActionTimestampRef  = useRef(0); // ms — set when explicit action taken
+
+  // Call this from any action to emit the correct activity immediately
+  const emitActivity = (key) => {
+    const act = ACTIVITY_MAP[key];
+    if (!act || !socketRef.current) return;
+    lastActionTimestampRef.current = Date.now();
+    lastEmittedSectionRef.current  = act.section;
+    socketRef.current.emit('user_activity', act);
+  };
+
+  // Passive scroll fallback — only fires when NOT in an active action (15 s cooldown)
+  const SCROLL_SECTIONS = [
+    { id: 'section-timer',      key: 'timer' },
+    { id: 'section-tictactoe',  key: 'tictactoe' },
+    { id: 'section-icebreaker', key: 'icebreaker' },
+    { id: 'section-desire',     key: 'desire' },
+    { id: 'section-whiteboard', key: 'whiteboard' },
+    { id: 'section-music',      key: 'music' },
+    { id: 'section-watch',      key: 'watch' },
+    { id: 'section-kanban',     key: 'kanban' },
+    { id: 'section-notes',      key: 'notes' },
   ];
 
-  const lastEmittedSectionRef = useRef('');
-  const activityDebounceRef   = useRef(null);
-
   useEffect(() => {
-    // Re-attach observers whenever the socket connects
-    // (isConnected is a state value so the effect properly re-runs)
     if (!socketRef.current || !isConnected) return;
     const observers = [];
 
-    SECTIONS.forEach(({ id, section, emoji, message }) => {
+    SCROLL_SECTIONS.forEach(({ id, key }) => {
       const el = document.getElementById(id);
       if (!el) return;
-      const obs = new IntersectionObserver(
-        ([entry]) => {
-          if (!entry.isIntersecting) return;
-          if (lastEmittedSectionRef.current === section) return; // already emitted
-          // Debounce 600 ms so quick scrolls don't spam
-          clearTimeout(activityDebounceRef.current);
-          activityDebounceRef.current = setTimeout(() => {
-            lastEmittedSectionRef.current = section;
-            socketRef.current?.emit('user_activity', { section, emoji, message });
-          }, 600);
-        },
-        { threshold: 0.3 }
-      );
+      const act = ACTIVITY_MAP[key];
+      const obs = new IntersectionObserver(([entry]) => {
+        if (!entry.isIntersecting) return;
+        if (lastEmittedSectionRef.current === act.section) return;
+        // Don't override an explicit action for 15 seconds
+        if (Date.now() - lastActionTimestampRef.current < 15000) return;
+        clearTimeout(activityDebounceRef.current);
+        activityDebounceRef.current = setTimeout(() => {
+          // Double-check cooldown after debounce wait
+          if (Date.now() - lastActionTimestampRef.current < 15000) return;
+          lastEmittedSectionRef.current = act.section;
+          socketRef.current?.emit('user_activity', act);
+        }, 1500); // 1.5 s debounce for scroll
+      }, { threshold: 0.55 }); // 55% visible before firing
       obs.observe(el);
       observers.push(obs);
     });
@@ -320,7 +344,7 @@ function Home() {
       observers.forEach(o => o.disconnect());
       clearTimeout(activityDebounceRef.current);
     };
-  }, [isConnected]); // re-run when socket connects
+  }, [isConnected]);
 
   useEffect(() => {
     if (!token) return;
@@ -847,6 +871,7 @@ function Home() {
   const handleAddKanbanCard = async (col) => {
     const text = (kanbanNewText[col] || '').trim();
     if (!text) return;
+    emitActivity('kanban');
     setKanbanNewText(prev => ({ ...prev, [col]: '' }));
     try {
       const res = await fetch(`${BACKEND_URL}/api/kanban/cards`, {
@@ -974,6 +999,7 @@ function Home() {
     if (!socketRef.current) return;
     setHangmanError('');
     setHangmanWordInput('');
+    emitActivity('hangman');
     socketRef.current.emit('hangman_start');
   };
 
@@ -988,6 +1014,7 @@ function Home() {
   const handleHangmanGuess = (letter) => {
     if (!socketRef.current) return;
     setHangmanError('');
+    emitActivity('hangman');
     socketRef.current.emit('hangman_guess_letter', { letter });
   };
 
@@ -1004,6 +1031,7 @@ function Home() {
     setLastNoteUpdated(new Date());
 
     localIsTypingRef.current = true;
+    emitActivity('notes');
     if (localTypingTimeoutRef.current) {
       clearTimeout(localTypingTimeoutRef.current);
     }
@@ -1237,6 +1265,7 @@ function Home() {
   const handleSelectSong = (song) => {
     setCurrentSong(song);
     setIsPlaying(true);
+    emitActivity('music');
     if (audioRef.current) {
       const src = song.fileUrl?.startsWith('http')
         ? song.fileUrl
@@ -1444,6 +1473,7 @@ function Home() {
     }
 
     if (state === 1) {
+      emitActivity('watch');
       if (socketRef.current) {
         socketRef.current.emit('yt_play', { currentTime });
       }
@@ -1467,6 +1497,7 @@ function Home() {
     }
 
     setCurrentVideoId(videoId);
+    emitActivity('watch');
     // Persist to localStorage immediately
     try { localStorage.setItem('presence_yt_video', videoId); } catch {}
     // Persist to DB so it survives refresh for both users
@@ -1670,6 +1701,7 @@ function Home() {
     }, 1000);
 
     if (socketRef.current) {
+      emitActivity('timer');
       socketRef.current.emit('timer_start', { durationMinutes: duration, startedAt });
     }
   };
@@ -1774,6 +1806,7 @@ function Home() {
 
   const handleStartGame = () => {
     if (socketRef.current) {
+      emitActivity('tictactoe');
       socketRef.current.emit('game_start_tictactoe');
     }
   };
@@ -1782,7 +1815,7 @@ function Home() {
     if (!gameState || gameState.status !== 'playing') return;
     if (gameState.turnUserId !== user._id) return;
     if (gameState.board[cellIndex] !== null) return;
-
+    emitActivity('tictactoe');
     if (socketRef.current) {
       socketRef.current.emit('game_make_move', { cellIndex });
     }
@@ -1819,16 +1852,13 @@ function Home() {
 
   const handleStartDrawing = (e) => {
     if (e.touches) e.preventDefault();
-
     const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
     const clientY = e.clientY ?? (e.touches && e.touches[0].clientY);
     if (clientX === undefined || clientY === undefined) return;
-
-    // Use the element that received the event for accurate coordinates
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (clientX - rect.left) / rect.width;
     const y = (clientY - rect.top) / rect.height;
-
+    emitActivity('whiteboard');
     setIsDrawing(true);
     prevCoordsRef.current = { x, y };
   };
@@ -1877,12 +1907,14 @@ function Home() {
 
   const handleStartIcebreaker = () => {
     if (socketRef.current) {
+      emitActivity('icebreaker');
       socketRef.current.emit('icebreaker_start');
     }
   };
 
   const handleIcebreakerAnswer = (choice) => {
     setIcebreakerChoice(choice);
+    emitActivity('icebreaker');
     if (socketRef.current) {
       socketRef.current.emit('icebreaker_answer', { choice });
     }
@@ -1896,11 +1928,13 @@ function Home() {
 
   const handleDesireStart = (cat = desireCategory) => {
     if (!socketRef.current) return;
+    emitActivity('desire');
     socketRef.current.emit('desire_start', { category: cat });
   };
 
   const handleDesireAnswer = (choice) => {
     setDesireChoice(choice);
+    emitActivity('desire');
     if (!socketRef.current) return;
     socketRef.current.emit('desire_answer', { choice });
   };
