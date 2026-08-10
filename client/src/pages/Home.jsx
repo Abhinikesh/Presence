@@ -83,6 +83,7 @@ function Home() {
   const handlePickCardColor = (color) => {
     setCardColor(color);
     localStorage.setItem('presence_cardColor', color);
+    socketRef.current?.emit('theme_change', { cardColor: color });
   };
 
   // Seed displayName from server (user.displayName) on first load
@@ -125,6 +126,7 @@ function Home() {
   const handlePickColor = (color) => {
     setBgColor(color);
     localStorage.setItem('presence_bgColor', color);
+    socketRef.current?.emit('theme_change', { bgColor: color });
   };
 
   // Resolve the name to show: custom > first word of google name
@@ -360,6 +362,18 @@ function Home() {
 
     socket.on('partner_activity', (data) => {
       setPartnerActivity(data);
+    });
+
+    // ── Shared Theme Sync ────────────────────────────────────────────
+    socket.on('partner_theme_change', ({ bgColor, cardColor }) => {
+      if (bgColor) {
+        setBgColor(bgColor);
+        localStorage.setItem('presence_bgColor', bgColor);
+      }
+      if (cardColor) {
+        setCardColor(cardColor);
+        localStorage.setItem('presence_cardColor', cardColor);
+      }
     });
 
     // ── Event-based toasts from partner actions ──────────────────

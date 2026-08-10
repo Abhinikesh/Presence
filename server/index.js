@@ -462,9 +462,13 @@ io.on('connection', async (socket) => {
 
       if (partnerOnline) {
         io.to(partnerInfo.socketId).emit('partner_online', { status: 'Free' });
-        // Also send partner's current activity to newly connected user
+        // Send partner's current activity to newly connected user
         if (partnerInfo.activity) {
           socket.emit('partner_activity', partnerInfo.activity);
+        }
+        // Send partner's current theme so it applies immediately
+        if (partnerInfo.theme) {
+          socket.emit('partner_theme_change', partnerInfo.theme);
         }
       }
     } else {
@@ -541,6 +545,34 @@ io.on('connection', async (socket) => {
       }
     } catch (err) {
       console.error(`Error relaying user_activity for ${userId}:`, err);
+    }
+  });
+
+  // ── Shared Theme Sync ───────────────────────────────────────────────────
+  socket.on('theme_change', async ({ bgColor, cardColor }) => {
+    try {
+      // Validate — only allow hex colours
+      const hexRe = /^#[0-9A-Fa-f]{3,8}$/;
+      if (bgColor && !hexRe.test(bgColor)) return;
+      if (cardColor && !hexRe.test(cardColor)) return;
+
+      // Persist in onlineUsers so partner gets it on connect
+      const userInfo = onlineUsers.get(userId);
+      if (userInfo) {
+        if (bgColor)   userInfo.theme = { ...(userInfo.theme || {}), bgColor };
+        if (cardColor) userInfo.theme = { ...(userInfo.theme || {}), cardColor };
+        onlineUsers.set(userId, userInfo);
+      }
+
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('partner_theme_change', { bgColor, cardColor });
+        }
+      }
+    } catch (err) {
+      console.error(`Error relaying theme_change for ${userId}:`, err);
     }
   });
 
