@@ -129,6 +129,12 @@ function Home() {
   const [activePing, setActivePing] = useState(null);
   const [sentStatus, setSentStatus] = useState({ heart: false, wave: false, thinking: false });
 
+  // ── Theater Mode ──────────────────────────────────────────────
+  const [theaterMode, setTheaterMode] = useState(null); // 'whiteboard'|'music'|'watchTogether'|'sharedNotes'
+  const theaterCanvasRef = useRef(null);
+  const [ytPlayerKey, setYtPlayerKey] = useState(0);
+  const prevTheaterRef = useRef(null);
+
   const [songs, setSongs] = useState([]);
   const [isSongsLoading, setIsSongsLoading] = useState(true);
   const [currentSong, setCurrentSong] = useState(null);
@@ -1355,10 +1361,11 @@ function Home() {
         playerVars: {
           playsinline: 1,
           rel: 0,
-          modestbranding: 1
+          modestbranding: 1,
+          start: window._ytSavedTime || 0,
         },
         events: {
-          onReady: onPlayerReady,
+          onReady: () => { window._ytSavedTime = 0; },
           onStateChange: onPlayerStateChange
         }
       });
@@ -1374,7 +1381,42 @@ function Home() {
         initPlayer();
       };
     }
-  }, [currentVideoId]);
+  }, [currentVideoId, ytPlayerKey]);
+
+  // ── Theater mode effects ───────────────────────────────────────
+  useEffect(() => {
+    const wasWatch = prevTheaterRef.current === 'watchTogether';
+    const isWatch = theaterMode === 'watchTogether';
+    const wasWhiteboard = prevTheaterRef.current === 'whiteboard';
+    prevTheaterRef.current = theaterMode;
+
+    // Whiteboard: copy card canvas → theater canvas on open
+    if (theaterMode === 'whiteboard') {
+      requestAnimationFrame(() => {
+        if (theaterCanvasRef.current && canvasRef.current) {
+          const src = canvasRef.current;
+          const dst = theaterCanvasRef.current;
+          dst.getContext('2d').drawImage(src, 0, 0, dst.width, dst.height);
+        }
+      });
+    }
+    // Whiteboard: copy theater canvas → card canvas on close
+    if (wasWhiteboard && theaterMode !== 'whiteboard') {
+      if (theaterCanvasRef.current && canvasRef.current) {
+        const src = theaterCanvasRef.current;
+        const dst = canvasRef.current;
+        dst.getContext('2d').drawImage(src, 0, 0, dst.width, dst.height);
+      }
+    }
+    // YouTube: reinit player when location changes (card ↔ theater)
+    if ((wasWatch !== isWatch) && currentVideoId) {
+      const savedTime = ytPlayerRef.current?.getCurrentTime?.() || 0;
+      if (ytPlayerRef.current?.destroy) { ytPlayerRef.current.destroy(); ytPlayerRef.current = null; }
+      setTimeout(() => setYtPlayerKey(k => k + 1), 200);
+      // stash saved time so initPlayer can use it
+      window._ytSavedTime = Math.floor(savedTime);
+    }
+  }, [theaterMode]);
 
   useEffect(() => {
     return () => {
@@ -1591,28 +1633,24 @@ function Home() {
   };
 
   const drawLine = (x1, y1, x2, y2, color, lineWidth, emit = true) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    
-    ctx.beginPath();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.moveTo(x1 * canvas.width, y1 * canvas.height);
-    ctx.lineTo(x2 * canvas.width, y2 * canvas.height);
-    ctx.stroke();
-    ctx.closePath();
+    // Draw on both the card canvas and the theater canvas (if open)
+    const canvases = [canvasRef.current, theaterCanvasRef.current].filter(Boolean);
+    canvases.forEach(canvas => {
+      const ctx = canvas.getContext('2d');
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(x1 * canvas.width, y1 * canvas.height);
+      ctx.lineTo(x2 * canvas.width, y2 * canvas.height);
+      ctx.stroke();
+      ctx.closePath();
+    });
 
     if (emit && socketRef.current) {
       socketRef.current.emit('canvas_draw', {
-        x: x2,
-        y: y2,
-        prevX: x1,
-        prevY: y1,
-        color,
-        lineWidth
+        x: x2, y: y2, prevX: x1, prevY: y1, color, lineWidth
       });
     }
   };
@@ -1668,10 +1706,15 @@ function Home() {
   };
 
   const handleClearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Clear card canvas
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
+    // Clear theater canvas if open
+    if (theaterCanvasRef.current) {
+      const ctx = theaterCanvasRef.current.getContext('2d');
+      ctx.clearRect(0, 0, theaterCanvasRef.current.width, theaterCanvasRef.current.height);
     }
     if (socketRef.current) {
       socketRef.current.emit('canvas_clear');
@@ -2034,6 +2077,270 @@ function Home() {
           </div>
         );
       })()}
+
+
+      {/* ── Theater Mode Overlay ─────────────────────────────── */}
+      {theaterMode && (
+        <div style={{
+          position: 'fixed', top: '56px', left: 0, right: 0, bottom: 0,
+          zIndex: 8000, background: '#0A0A12',
+          display: 'flex', flexDirection: 'column',
+          animation: 'theaterFadeIn 0.25s ease-out',
+        }}>
+          {/* Theater Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)',
+            background: 'rgba(255,255,255,0.02)', flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.25rem' }}>
+                {theaterMode === 'whiteboard' ? '🎨' : theaterMode === 'music' ? '🎵' : theaterMode === 'watchTogether' ? '🎬' : '📝'}
+              </span>
+              <span style={{ color: '#fff', fontWeight: 700, fontSize: '1.05rem' }}>
+                {theaterMode === 'whiteboard' ? 'Whiteboard' : theaterMode === 'music' ? 'Music' : theaterMode === 'watchTogether' ? 'Watch Together' : 'Shared Notes'}
+              </span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: '#E8623F', letterSpacing: '0.08em', marginLeft: '2px' }}>
+                {theaterMode === 'whiteboard' ? 'Live Canvas' : theaterMode === 'music' ? 'Synced Player' : theaterMode === 'watchTogether' ? 'Sync Video' : 'Live Synced'}
+              </span>
+            </div>
+            <button
+              onClick={() => setTheaterMode(null)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: '8px', color: '#fff', padding: '8px 16px',
+                cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                transition: 'background 0.2s',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+              </svg>
+              Exit Theater
+            </button>
+          </div>
+
+          {/* Theater Content */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column' }}>
+
+            {/* ─── WHITEBOARD ─── */}
+            {theaterMode === 'whiteboard' && (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {['#FFFFFF','#1A1A1A','#E8623F','#4A90E2','#2ECC71','#F1C40F','#9B59B6','#EF4444'].map(c => (
+                      <button key={c} onClick={() => setBrushColor(c)} style={{
+                        width: '28px', height: '28px', borderRadius: '50%', backgroundColor: c, padding: 0,
+                        border: brushColor === c ? '3px solid rgba(255,255,255,0.9)' : '1px solid rgba(255,255,255,0.25)',
+                        boxShadow: brushColor === c ? '0 0 0 2px #E8623F' : 'none',
+                        cursor: 'pointer', transition: 'all 0.15s',
+                      }}/>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>Size:</span>
+                    {[{l:'S',s:2},{l:'M',s:5},{l:'L',s:12},{l:'XL',s:20}].map(p => (
+                      <button key={p.s} onClick={() => setBrushWidth(p.s)} style={{
+                        padding: '3px 10px', fontSize: '0.72rem', borderRadius: '6px', cursor: 'pointer',
+                        background: brushWidth === p.s ? '#E8623F' : 'rgba(255,255,255,0.08)',
+                        color: brushWidth === p.s ? '#fff' : 'rgba(255,255,255,0.6)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                      }}>{p.l}</button>
+                    ))}
+                    <button onClick={handleClearCanvas} style={{
+                      padding: '3px 14px', fontSize: '0.72rem', borderRadius: '6px', cursor: 'pointer', marginLeft: '6px',
+                      background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)',
+                    }}>Clear</button>
+                  </div>
+                </div>
+                <div style={{
+                  flex: 1, backgroundColor: '#FFFFFF', borderRadius: '10px',
+                  overflow: 'hidden', minHeight: '60vh', touchAction: 'none', position: 'relative',
+                }}>
+                  <canvas
+                    ref={theaterCanvasRef}
+                    width={1200} height={800}
+                    onMouseDown={handleStartDrawing} onMouseMove={handleDrawing}
+                    onMouseUp={handleStopDrawing} onMouseLeave={handleStopDrawing}
+                    onTouchStart={handleStartDrawing} onTouchMove={handleDrawing} onTouchEnd={handleStopDrawing}
+                    style={{ display: 'block', width: '100%', height: '100%', cursor: 'crosshair' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ─── MUSIC ─── */}
+            {theaterMode === 'music' && (
+              <div style={{ display: 'flex', gap: '28px', flex: 1, minHeight: 0 }}>
+                {/* Song grid */}
+                <div style={{ flex: 1, overflow: 'auto' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h3 style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 700 }}>Shared Songs ({songs.length})</h3>
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer',
+                      background: 'rgba(255,255,255,0.08)', borderRadius: '8px', padding: '7px 14px',
+                      color: 'rgba(255,255,255,0.8)', fontSize: '0.78rem', border: '1px solid rgba(255,255,255,0.12)',
+                    }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      {isUploading ? 'Uploading…' : 'Upload Song'}
+                      <input type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" onChange={handleFileUpload} style={{ display: 'none' }}/>
+                    </label>
+                  </div>
+                  {songs.length === 0 ? (
+                    <div style={{ color: 'rgba(255,255,255,0.35)', textAlign: 'center', padding: '80px 0', fontSize: '0.875rem' }}>
+                      No songs yet. Upload an MP3 or WAV to get started!
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
+                      {songs.map((song, idx) => {
+                        const isSel = currentSong?._id === song._id;
+                        const hue = (idx * 53 + 200) % 360;
+                        return (
+                          <div key={song._id} onClick={() => handleSelectSong(song)} style={{
+                            borderRadius: '12px', overflow: 'hidden', cursor: 'pointer',
+                            border: isSel ? '2px solid #E8623F' : '2px solid rgba(255,255,255,0.07)',
+                            transform: isSel ? 'scale(1.04)' : 'scale(1)',
+                            transition: 'all 0.2s ease',
+                            boxShadow: isSel ? `0 0 24px hsla(${hue},60%,50%,0.35)` : 'none',
+                          }}>
+                            <div style={{
+                              height: '130px',
+                              background: `linear-gradient(135deg, hsl(${hue},60%,40%), hsl(${(hue+45)%360},65%,28%))`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              {isSel && isPlaying ? (
+                                <div style={{ display: 'flex', gap: '3px', alignItems: 'flex-end', height: '30px' }}>
+                                  {[0.6,1,0.75,0.5,0.85].map((h,i) => (
+                                    <div key={i} style={{
+                                      width: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.85)',
+                                      height: `${h*100}%`, animation: `musicBar ${0.7+i*0.1}s ease-in-out infinite alternate`,
+                                    }}/>
+                                  ))}
+                                </div>
+                              ) : (
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="rgba(255,255,255,0.75)">
+                                  <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                                </svg>
+                              )}
+                            </div>
+                            <div style={{ padding: '9px 11px', background: isSel ? 'rgba(232,98,63,0.18)' : 'rgba(255,255,255,0.05)' }}>
+                              <div style={{
+                                fontSize: '0.75rem', fontWeight: 600, color: isSel ? '#fff' : 'rgba(255,255,255,0.75)',
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              }}>{song.title}</div>
+                              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.38)', marginTop: '2px' }}>
+                                {isSel && isPlaying ? '▶ Playing' : 'Tap to play'}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Player panel */}
+                {currentSong && (
+                  <div style={{
+                    width: '260px', flexShrink: 0, background: 'rgba(255,255,255,0.04)',
+                    borderRadius: '16px', padding: '22px', display: 'flex', flexDirection: 'column',
+                    gap: '14px', border: '1px solid rgba(255,255,255,0.07)', alignSelf: 'flex-start',
+                    position: 'sticky', top: 0,
+                  }}>
+                    {(() => {
+                      const idx = songs.findIndex(s => s._id === currentSong._id);
+                      const hue = ((idx < 0 ? 0 : idx) * 53 + 200) % 360;
+                      return (
+                        <div style={{
+                          height: '160px', borderRadius: '10px',
+                          background: `linear-gradient(135deg, hsl(${hue},60%,40%), hsl(${(hue+45)%360},65%,28%))`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="rgba(255,255,255,0.75)">
+                            <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                          </svg>
+                        </div>
+                      );
+                    })()}
+                    <div>
+                      <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Now Playing</div>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff', marginTop: '3px', wordBreak: 'break-word' }}>{currentSong.title}</div>
+                    </div>
+                    <input type="range" min="0" max={duration || 0} value={currentTime || 0} onChange={handleSeek}
+                      style={{ width: '100%', accentColor: '#E8623F' }}/>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'rgba(255,255,255,0.38)' }}>
+                      <span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span>
+                    </div>
+                    <button onClick={handlePlayPause} style={{
+                      width: '100%', padding: '11px', borderRadius: '10px', cursor: 'pointer',
+                      background: isPlaying ? 'rgba(255,255,255,0.1)' : '#E8623F',
+                      color: '#fff', border: 'none', fontWeight: 700, fontSize: '0.875rem',
+                    }}>
+                      {isPlaying ? '⏸ Pause' : '▶ Play'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ─── WATCH TOGETHER ─── */}
+            {theaterMode === 'watchTogether' && (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <form onSubmit={handleLoadYtVideo} style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="text" placeholder="Paste YouTube link here…"
+                    value={ytUrl} onChange={e => setYtUrl(e.target.value)}
+                    style={{
+                      flex: 1, padding: '10px 16px', borderRadius: '8px', fontSize: '0.875rem',
+                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)',
+                      color: '#fff', outline: 'none',
+                    }}
+                  />
+                  <button type="submit" style={{
+                    padding: '10px 20px', borderRadius: '8px', background: '#EF4444',
+                    color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700,
+                  }}>Load</button>
+                </form>
+                {ytError && <div style={{ color: '#FCA5A5', fontSize: '0.8rem' }}>{ytError}</div>}
+                <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', background: '#000', minHeight: '60vh' }}>
+                  <div id="youtube-player" style={{ width: '100%', height: '100%' }}/>
+                </div>
+              </div>
+            )}
+
+            {/* ─── SHARED NOTES ─── */}
+            {theaterMode === 'sharedNotes' && (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', margin: 0 }}>
+                  A shared space for both of you — thoughts, to-dos, anything. Last write wins.
+                </p>
+                <textarea
+                  style={{
+                    flex: 1, width: '100%', minHeight: '70vh', boxSizing: 'border-box',
+                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '12px', padding: '20px', color: '#EFEFEF',
+                    fontSize: '1rem', lineHeight: 1.75, fontFamily: 'inherit',
+                    resize: 'none', outline: 'none',
+                  }}
+                  value={sharedNote}
+                  onChange={handleNoteChange}
+                  placeholder="Start writing something together…"
+                  maxLength={10000}
+                  spellCheck
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)' }}>
+                  <span>{partnerIsTyping ? `${partnerName} is typing…` : (lastNoteUpdated ? `Last updated ${lastNoteUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Start typing to sync with your partner')}</span>
+                  <span>{sharedNote.length} / 10,000 chars</span>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       <audio
         ref={audioRef}
