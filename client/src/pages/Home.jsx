@@ -276,22 +276,24 @@ function Home() {
 
   // ── Section Activity — IntersectionObserver ────────────────────────────
   const SECTIONS = [
-    { id: 'section-whiteboard',   section: 'Whiteboard',    emoji: '🎨', message: 'is drawing something for you' },
-    { id: 'section-music',        section: 'Music',          emoji: '🎵', message: 'is picking a song for you' },
-    { id: 'section-watch',        section: 'Watch Together', emoji: '🎬', message: 'wants to watch something together' },
-    { id: 'section-kanban',       section: 'Kanban',         emoji: '✅', message: 'is organizing tasks for you both' },
-    { id: 'section-notes',        section: 'Shared Notes',   emoji: '📝', message: 'is writing something for you' },
-    { id: 'section-tictactoe',    section: 'Tic Tac Toe',    emoji: '🎮', message: 'wants to play a game' },
-    { id: 'section-hangman',      section: 'Hangman',        emoji: '🔤', message: 'wants to play Hangman' },
-    { id: 'section-timer',        section: 'Study Timer',    emoji: '⏰', message: 'is studying with you' },
-    { id: 'section-icebreaker',   section: 'Icebreaker',     emoji: '💫', message: 'is thinking of a question for you' },
-    { id: 'section-location',     section: 'Location',       emoji: '📍', message: 'is checking where you are' },
+    { id: 'section-timer',      section: 'Study Room',    emoji: '⏰', message: 'is studying with you ❤️' },
+    { id: 'section-tictactoe', section: 'Games',          emoji: '🎮', message: 'wants to play a game with you' },
+    { id: 'section-icebreaker',section: 'Icebreakers',    emoji: '💫', message: 'is thinking of a question for you' },
+    { id: 'section-desire',    section: 'Desire Meet',    emoji: '🔥', message: 'wants to play Desire Meet with you 💕' },
+    { id: 'section-whiteboard',section: 'Whiteboard',     emoji: '🎨', message: 'is drawing something for you' },
+    { id: 'section-music',     section: 'Music',          emoji: '🎵', message: 'is picking a song for you' },
+    { id: 'section-watch',     section: 'Watch Together', emoji: '🎬', message: 'wants to watch something together' },
+    { id: 'section-kanban',    section: 'Kanban',         emoji: '✅', message: 'is organizing tasks for you both' },
+    { id: 'section-notes',     section: 'Shared Notes',   emoji: '📝', message: 'is writing something for you' },
   ];
 
   const lastEmittedSectionRef = useRef('');
+  const activityDebounceRef   = useRef(null);
 
   useEffect(() => {
-    if (!socketRef.current) return;
+    // Re-attach observers whenever the socket connects
+    // (isConnected is a state value so the effect properly re-runs)
+    if (!socketRef.current || !isConnected) return;
     const observers = [];
 
     SECTIONS.forEach(({ id, section, emoji, message }) => {
@@ -299,19 +301,26 @@ function Home() {
       if (!el) return;
       const obs = new IntersectionObserver(
         ([entry]) => {
-          if (entry.isIntersecting && lastEmittedSectionRef.current !== section) {
+          if (!entry.isIntersecting) return;
+          if (lastEmittedSectionRef.current === section) return; // already emitted
+          // Debounce 600 ms so quick scrolls don't spam
+          clearTimeout(activityDebounceRef.current);
+          activityDebounceRef.current = setTimeout(() => {
             lastEmittedSectionRef.current = section;
             socketRef.current?.emit('user_activity', { section, emoji, message });
-          }
+          }, 600);
         },
-        { threshold: 0.35 }
+        { threshold: 0.3 }
       );
       obs.observe(el);
       observers.push(obs);
     });
 
-    return () => observers.forEach(o => o.disconnect());
-  }, [socketRef.current]);
+    return () => {
+      observers.forEach(o => o.disconnect());
+      clearTimeout(activityDebounceRef.current);
+    };
+  }, [isConnected]); // re-run when socket connects
 
   useEffect(() => {
     if (!token) return;
@@ -639,6 +648,29 @@ function Home() {
     socket.on('kanban_card_moved',   () => fetchKanbanCards());
     socket.on('kanban_card_updated', () => fetchKanbanCards());
     socket.on('kanban_card_deleted', () => fetchKanbanCards());
+
+    // ── Real-time Song Sync ────────────────────────────────────────────────
+    socket.on('song_added', (song) => {
+      setSongs(prev => {
+        // Avoid duplicates if own upload also triggers
+        if (prev.some(s => s._id === song._id)) return prev;
+        return [song, ...prev];
+      });
+      showToast('\ud83c\udfb5', `${partnerName || 'Your love'} shared a new song \u2764\ufe0f`);
+    });
+
+    socket.on('song_deleted', ({ _id }) => {
+      setSongs(prev => prev.filter(s => s._id !== _id));
+      // If the deleted song was playing, stop playback
+      setCurrentSong(prev => {
+        if (prev && prev._id === _id) {
+          if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
+          setIsPlaying(false);
+          return null;
+        }
+        return prev;
+      });
+    });
 
     // Real-time partner name change
     socket.on('partner_name_update', (data) => {
@@ -3345,7 +3377,7 @@ function Home() {
             </div>
           </div>
 
-          <div className="feature-card card-accent-desire" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
+          <div id="section-desire" className="feature-card card-accent-desire" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2 style={{ marginBottom: '4px' }}>
               💋 Desire Meets Discretion{' '}
               <span style={{ fontSize: '0.75rem', color: '#BE185D', fontWeight: 'bold', textTransform: 'uppercase' }}>

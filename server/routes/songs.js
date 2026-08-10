@@ -32,6 +32,18 @@ function normalizeTitle(name) {
     .replace(/\s+/g, ' ');
 }
 
+// Helper — emit to partner if online
+function emitToPartner(req, event, payload) {
+  try {
+    const io          = req.app.get('io');
+    const onlineUsers = req.app.get('onlineUsers');
+    const partnerId   = req.user.pairId?.toString();
+    if (!io || !onlineUsers || !partnerId) return;
+    const partnerInfo = onlineUsers.get(partnerId);
+    if (partnerInfo) io.to(partnerInfo.socketId).emit(event, payload);
+  } catch (_) {}
+}
+
 // POST /upload
 router.post('/upload', auth, (req, res) => {
   if (!req.user.pairId) {
@@ -66,7 +78,7 @@ router.post('/upload', auth, (req, res) => {
         // Delete the just-uploaded file from Cloudinary so we don't waste storage
         if (req.file.filename) {
           await cloudinary.uploader.destroy(req.file.filename, { resource_type: 'video' })
-            .catch(() => {}); // silently ignore if already gone
+            .catch(() => {});
         }
         return res.status(409).json({
           error: `You already uploaded "${existing.title}". Duplicate songs are not allowed.`
@@ -83,6 +95,10 @@ router.post('/upload', auth, (req, res) => {
         pairId:          req.user.pairId
       });
       await song.save();
+
+      // ── Notify partner in real-time ────────────────────────────────────
+      emitToPartner(req, 'song_added', song);
+
       res.status(201).json({ message: 'Song uploaded successfully!', song });
     } catch (dbErr) {
       res.status(500).json({ error: 'Database error: ' + dbErr.message });
@@ -122,6 +138,10 @@ router.delete('/:id', auth, async (req, res) => {
     }
 
     await song.deleteOne();
+
+    // ── Notify partner in real-time ────────────────────────────────────
+    emitToPartner(req, 'song_deleted', { _id: req.params.id });
+
     res.json({ message: 'Song deleted.', _id: req.params.id });
   } catch (err) {
     res.status(500).json({ error: 'Delete failed: ' + err.message });
