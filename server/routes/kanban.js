@@ -27,7 +27,6 @@ async function getFullBoard(pairId) {
   return board;
 }
 
-// GET /cards — flat list
 router.get('/cards', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
