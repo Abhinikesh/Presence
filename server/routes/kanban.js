@@ -20,7 +20,6 @@ function emitToPartner(req, event, data) {
   }
 }
 
-// Get full board grouped by column
 async function getFullBoard(pairId) {
   const cards = await KanbanCard.find({ pairId }).sort({ position: 1 });
   const board = { todo: [], in_progress: [], done: [] };
