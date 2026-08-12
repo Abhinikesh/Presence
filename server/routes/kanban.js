@@ -49,7 +49,6 @@ router.get('/board', auth, async (req, res) => {
   }
 });
 
-// POST /cards — create
 router.post('/cards', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
