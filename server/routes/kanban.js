@@ -20,7 +20,6 @@ function emitToPartner(req, event, data) {
   }
 }
 
-// Get full board grouped by column
 async function getFullBoard(pairId) {
   const cards = await KanbanCard.find({ pairId }).sort({ position: 1 });
   const board = { todo: [], in_progress: [], done: [] };
@@ -28,7 +27,6 @@ async function getFullBoard(pairId) {
   return board;
 }
 
-// GET /cards — flat list
 router.get('/cards', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
@@ -51,7 +49,6 @@ router.get('/board', auth, async (req, res) => {
   }
 });
 
-// POST /cards — create
 router.post('/cards', auth, async (req, res) => {
   try {
     const pairId = getPairKey(req.user);
