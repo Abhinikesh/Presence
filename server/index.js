@@ -354,6 +354,9 @@ app.set('io', io);
 const onlineUsers = new Map();
 app.set('onlineUsers', onlineUsers);
 
+// Memory store for synchronized music playback across paired users
+const pairMusicState = new Map();
+
 const tictactoeGames = new Map();
 const icebreakerGames = new Map();
 
@@ -629,6 +632,181 @@ io.on('connection', async (socket) => {
       }
     } catch (err) {
       console.error(`Error syncing change_song for user ${userId}:`, err);
+    }
+  });
+
+  // ── Real-time Two-Person Music Sync ─────────────────────────────────────
+  socket.on('music:play', async (data) => {
+    const { track, currentTime } = data || {};
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const pairKey = [user._id.toString(), user.pairId.toString()].sort().join(':');
+        const prev = pairMusicState.get(pairKey) || {};
+        pairMusicState.set(pairKey, {
+          ...prev,
+          track: track || prev.track,
+          currentTime: typeof currentTime === 'number' ? currentTime : (prev.currentTime || 0),
+          isPlaying: true,
+          timestamp: Date.now()
+        });
+
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('music:sync_play', { track, currentTime });
+        }
+      }
+    } catch (err) {
+      console.error(`Error in music:play for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('music:pause', async (data) => {
+    const { currentTime } = data || {};
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const pairKey = [user._id.toString(), user.pairId.toString()].sort().join(':');
+        const prev = pairMusicState.get(pairKey) || {};
+        pairMusicState.set(pairKey, {
+          ...prev,
+          currentTime: typeof currentTime === 'number' ? currentTime : (prev.currentTime || 0),
+          isPlaying: false,
+          timestamp: Date.now()
+        });
+
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('music:sync_pause', { currentTime });
+        }
+      }
+    } catch (err) {
+      console.error(`Error in music:pause for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('music:seek', async (data) => {
+    const { currentTime } = data || {};
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const pairKey = [user._id.toString(), user.pairId.toString()].sort().join(':');
+        const prev = pairMusicState.get(pairKey) || {};
+        pairMusicState.set(pairKey, {
+          ...prev,
+          currentTime: typeof currentTime === 'number' ? currentTime : 0,
+          timestamp: Date.now()
+        });
+
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('music:sync_seek', { currentTime });
+        }
+      }
+    } catch (err) {
+      console.error(`Error in music:seek for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('music:track_change', async (data) => {
+    const { track, autoPlay, currentTime, isShuffle, repeatMode } = data || {};
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const pairKey = [user._id.toString(), user.pairId.toString()].sort().join(':');
+        const prev = pairMusicState.get(pairKey) || {};
+        pairMusicState.set(pairKey, {
+          ...prev,
+          track,
+          currentTime: currentTime || 0,
+          isPlaying: autoPlay !== undefined ? autoPlay : true,
+          isShuffle: isShuffle !== undefined ? isShuffle : prev.isShuffle,
+          repeatMode: repeatMode || prev.repeatMode,
+          timestamp: Date.now()
+        });
+
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('music:sync_track_change', {
+            track,
+            autoPlay,
+            currentTime,
+            isShuffle,
+            repeatMode
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`Error in music:track_change for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('music:queue_update', async (data) => {
+    const { tracks } = data || {};
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const pairKey = [user._id.toString(), user.pairId.toString()].sort().join(':');
+        const prev = pairMusicState.get(pairKey) || {};
+        pairMusicState.set(pairKey, { ...prev, tracks });
+
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('music:sync_queue_update', { tracks });
+        }
+      }
+    } catch (err) {
+      console.error(`Error in music:queue_update for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('music:request_sync', async () => {
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const pairKey = [user._id.toString(), user.pairId.toString()].sort().join(':');
+        const state = pairMusicState.get(pairKey);
+
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('music:request_sync', { requesterUserId: userId });
+        } else if (state && state.track) {
+          let currentPos = state.currentTime || 0;
+          if (state.isPlaying && state.timestamp) {
+            currentPos += (Date.now() - state.timestamp) / 1000;
+          }
+          socket.emit('music:sync_state', {
+            track: state.track,
+            currentTime: currentPos,
+            isPlaying: state.isPlaying,
+            isShuffle: state.isShuffle,
+            repeatMode: state.repeatMode,
+            tracks: state.tracks
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`Error in music:request_sync for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('music:sync_state', async (data) => {
+    try {
+      const user = await User.findById(userId);
+      if (user && user.pairId) {
+        const pairKey = [user._id.toString(), user.pairId.toString()].sort().join(':');
+        pairMusicState.set(pairKey, {
+          ...data,
+          timestamp: Date.now()
+        });
+
+        const partnerInfo = onlineUsers.get(user.pairId.toString());
+        if (partnerInfo) {
+          io.to(partnerInfo.socketId).emit('music:sync_state', data);
+        }
+      }
+    } catch (err) {
+      console.error(`Error in music:sync_state relay for user ${userId}:`, err);
     }
   });
 

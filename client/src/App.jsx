@@ -1,13 +1,15 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
+import { MusicProvider } from './features/music';
 import Login from './pages/Login';
 import Pair from './pages/Pair';
 import Home from './pages/Home';
 import { MusicPage } from './features/music';
 
-// sirf logged-in users ke liye route
-function ProtectedRoute({ children }) {
+// Persistent layout for authenticated routes to keep socket and audio engine mounted
+function AuthenticatedLayout() {
   const { token, loading } = useAuth();
 
   if (loading) {
@@ -23,7 +25,13 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/" replace />;
   }
 
-  return children;
+  return (
+    <SocketProvider>
+      <MusicProvider>
+        <Outlet />
+      </MusicProvider>
+    </SocketProvider>
+  );
 }
 
 // logged-in users ko login page pe jaane se rokna
@@ -52,9 +60,11 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/pair" element={<ProtectedRoute><Pair /></ProtectedRoute>} />
-          <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-          <Route path="/music" element={<ProtectedRoute><MusicPage /></ProtectedRoute>} />
+          <Route element={<AuthenticatedLayout />}>
+            <Route path="/pair" element={<Pair />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/music" element={<MusicPage />} />
+          </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>

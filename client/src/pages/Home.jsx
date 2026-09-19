@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import { BACKEND_URL } from '../config';
+import { useSocket } from '../context/SocketContext';
+import { useMusic, MiniPlayerBar } from '../features/music';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { ChatIcon, ChatBox, useMessaging } from '../messaging';
 
@@ -54,7 +56,9 @@ function GearIcon({ size = 18 }) {
 }
 
 function Home() {
-  const { user, token, logout, setUser } = useAuth();
+  const { token, user, logout, setUser } = useAuth();
+  const { socket: contextSocket } = useSocket();
+  const { currentTrack: sharedCurrentTrack, isPlaying: isSharedPlaying } = useMusic();
   const [partnerName, setPartnerName] = useState('');
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [partnerStatus, setPartnerStatus] = useState('');
@@ -366,8 +370,8 @@ function Home() {
   useEffect(() => {
     if (!token) return;
 
-    // socket connection initialize kr rhe hai token ke sath
-    const socket = io(BACKEND_URL, {
+    // socket connection initialize kr rhe hai token ke sath (reusing shared context socket if available)
+    const socket = contextSocket || io(BACKEND_URL, {
       auth: {
         token: token
       }
@@ -766,10 +770,12 @@ function Home() {
     });
 
     return () => {
-      socket.disconnect();
+      if (!contextSocket) {
+        socket.disconnect();
+      }
       socketRef.current = null;
     };
-  }, [token]);
+  }, [token, contextSocket]);
 
   const fetchPendingNote = async () => {
     if (!token) return;
@@ -3714,7 +3720,15 @@ function Home() {
           <div id="section-music" className="feature-card card-accent-music" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{songs.length} {songs.length === 1 ? 'song' : 'songs'}</span>
+              <button
+                onClick={() => navigate('/music')}
+                title="Open full player"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              </button>
             </h2>
 
             <div style={{
@@ -3748,7 +3762,7 @@ function Home() {
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-color)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  {isPlaying ? 'Now Playing' : 'Queued Track'}
+                  {isSharedPlaying ? 'Now Playing' : 'Queued Track'}
                 </div>
                 <div style={{
                   fontSize: '0.9375rem',
@@ -3758,31 +3772,12 @@ function Home() {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis'
                 }}>
-                  {currentSong ? currentSong.title : (songs[0]?.title || 'Andheri Raatein')}
+                  {sharedCurrentTrack ? sharedCurrentTrack.title : (songs[0]?.title || 'Andheri Raatein')}
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={() => navigate('/music')}
-              className="btn btn-primary"
-              style={{
-                width: '100%',
-                marginTop: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="6 3 20 12 6 21 6 3" />
-              </svg>
-              <span>Open Full Music Player</span>
-            </button>
+            <MiniPlayerBar />
           </div>
 
           <div id="section-watch" className="feature-card card-accent-watch" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>

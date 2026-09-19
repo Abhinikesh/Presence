@@ -2,44 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../config';
-import { useMusicPlayer } from './useMusicPlayer';
+import { useMusic } from './MusicContext';
 import NowPlayingHero from './NowPlayingHero';
 import SearchBar from './SearchBar';
 import QueueList from './QueueList';
 import { ArrowLeftIcon } from './icons';
 import './music.css';
-
-// Sample demonstration tracks matching the reference screenshot
-const SAMPLE_TRACKS = [
-  {
-    _id: 'sample-1',
-    title: 'Andheri Raatein',
-    artist: 'Rameet',
-    duration: '3:08',
-    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786386019/presence/songs/hdhppqh0jebm9swkjasp.mp3'
-  },
-  {
-    _id: 'sample-2',
-    title: 'Khuda Jaane',
-    artist: 'KK, Shilpa Rao',
-    duration: '4:52',
-    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786393680/presence/songs/oikaxp6fq4najorgm9pq.mp3'
-  },
-  {
-    _id: 'sample-3',
-    title: 'Soch Na Sake',
-    artist: 'Amaal Mallik, Arijit Singh',
-    duration: '4:08',
-    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786386019/presence/songs/hdhppqh0jebm9swkjasp.mp3'
-  },
-  {
-    _id: 'sample-4',
-    title: 'Tera Yaar Hoon Main',
-    artist: 'Arijit Singh',
-    duration: '5:01',
-    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786393680/presence/songs/oikaxp6fq4najorgm9pq.mp3'
-  }
-];
 
 export default function MusicPage() {
   const navigate = useNavigate();
@@ -66,7 +34,7 @@ export default function MusicPage() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // ── Playback Engine Hook ──
+  // ── Shared Playback Engine & Real-time Synced State ──
   const {
     tracks,
     currentTrack,
@@ -85,40 +53,13 @@ export default function MusicPage() {
     moveUp,
     moveDown,
     removeTrack,
-    setQueue
-  } = useMusicPlayer(SAMPLE_TRACKS);
+    fetchSongs
+  } = useMusic();
 
   // ── Search Query State ──
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-
-  // Fetch existing shared songs from backend
-  const fetchSongs = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/songs`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          setQueue(data);
-        } else {
-          setQueue(SAMPLE_TRACKS);
-        }
-      } else {
-        setQueue(SAMPLE_TRACKS);
-      }
-    } catch (err) {
-      console.error('Error fetching songs for Music page:', err);
-      setQueue(SAMPLE_TRACKS);
-    }
-  };
-
-  useEffect(() => {
-    fetchSongs();
-  }, [token]);
 
   // Upload handler reusing existing backend endpoint
   const handleUploadSong = async (file) => {
