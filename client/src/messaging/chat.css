@@ -426,3 +426,68 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+
+/* ── Mobile Responsive Fullscreen Chat Drawer ──────────────── */
+@media (max-width: 640px) {
+  .pm-popover {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    z-index: 1000;
+  }
+
+  .pm-header {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #E2E8F0;
+  }
+
+  .pm-header-btn {
+    width: 38px;
+    height: 38px;
+    background: #F1F5F9;
+  }
+
+  .pm-body {
+    padding: 14px 16px;
+  }
+
+  .pm-msg {
+    max-width: 86%;
+  }
+
+  .pm-msg-text {
+    font-size: 14.5px;
+  }
+
+  .pm-footer {
+    padding-top: 10px;
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #E2E8F0;
+  }
+
+  .pm-input {
+    font-size: 16px; /* Prevents auto-zoom on iOS Safari */
+    padding: 10px 16px;
+  }
+
+  .pm-send-btn {
+    width: 42px;
+    height: 42px;
+  }
+}
+

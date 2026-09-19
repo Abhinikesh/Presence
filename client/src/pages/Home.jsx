@@ -2291,7 +2291,7 @@ function Home() {
 
       {/* ── Theater Mode Overlay ─────────────────────────────── */}
       {theaterMode && (
-        <div style={{
+        <div className="presence-theater-mode" style={{
           position: 'fixed', top: '56px', left: 0, right: 0, bottom: 0,
           zIndex: 8000, background: '#0A0A12',
           display: 'flex', flexDirection: 'column',
@@ -2778,7 +2778,7 @@ function Home() {
                   <label className="form-label" style={{ marginBottom: '6px', display: 'block' }}>
                     Leave a note for next status change:
                   </label>
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <div className="home-note-row" style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                     <input
                       type="text"
                       maxLength="300"
@@ -4025,7 +4025,7 @@ function Home() {
       </div>
       {/* ── Toast Notifications ──────────────────────────────────── */}
       {toasts.length > 0 && (
-        <div style={{
+        <div className="presence-toast-container" style={{
           position: 'fixed', bottom: '24px', right: '24px',
           zIndex: 99999, display: 'flex', flexDirection: 'column', gap: '10px',
           pointerEvents: 'none',

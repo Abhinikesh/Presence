@@ -558,7 +558,21 @@
 /* ── Responsive Mobile Adjustments ── */
 @media (max-width: 640px) {
   .music-page-wrapper {
-    padding: 20px 14px 60px 14px;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    padding-top: calc(20px + env(safe-area-inset-top, 0px));
+    padding-left: 14px;
+    padding-right: 14px;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .music-page-title {
+    font-size: 1.45rem;
+  }
+
+  .music-search-input {
+    font-size: 16px; /* Prevents auto-zoom on iOS Safari */
   }
 
   .music-hero-card {
@@ -574,6 +588,7 @@
 
   .music-track-meta {
     align-items: center;
+    width: 100%;
   }
 
   .music-track-title {
@@ -589,6 +604,11 @@
     gap: 18px;
   }
 
+  .music-control-btn {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
   .music-track-row {
     padding: 10px 12px;
     gap: 10px;
@@ -597,4 +617,77 @@
   .music-row-actions {
     gap: 6px;
   }
+
+  .music-action-btn {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 6px;
+  }
 }
+
+@media (max-width: 420px) {
+  .music-page-wrapper {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .music-controls-row {
+    gap: 14px;
+  }
+
+  .music-play-pause-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .music-track-row {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .music-row-index {
+    min-width: 16px;
+    font-size: 0.775rem;
+  }
+
+  .music-row-art {
+    width: 36px;
+    height: 36px;
+  }
+
+  .music-row-title {
+    font-size: 0.875rem;
+  }
+
+  .music-row-artist {
+    font-size: 0.75rem;
+  }
+
+  .music-row-duration {
+    font-size: 0.75rem;
+    min-width: 28px;
+  }
+
+  .music-action-btn {
+    min-width: 30px;
+    min-height: 30px;
+    padding: 4px;
+  }
+}
+
+/* Home Page Mini Player Mobile Touch Area Polish */
+.home-music-mini-player button {
+  touch-action: manipulation;
+}
+
+@media (max-width: 480px) {
+  .home-music-mini-player {
+    padding: 10px 12px;
+  }
+
+  .home-music-mini-player button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
