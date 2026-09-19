@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Message = require('../models/Message');
+const User = require('../models/User');
 const auth = require('../middleware/auth');
 const { decrypt } = require('../utils/crypto');
 
@@ -17,7 +18,13 @@ router.get('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'You are not paired with anyone yet.' });
     }
 
-    const limit = parseInt(req.query.limit, 10) || 100;
+    // Verify reciprocal pair relationship
+    const partner = await User.findById(req.user.pairId);
+    if (!partner || !partner.pairId || partner.pairId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Pair connection is inactive or invalid.' });
+    }
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200);
     const messages = await Message.find({ pairId })
       .sort({ createdAt: 1 })
       .limit(limit)
@@ -28,7 +35,7 @@ router.get('/', auth, async (req, res) => {
       pairId: msg.pairId,
       sender: msg.sender,
       recipient: msg.recipient,
-      text: decrypt(msg.text, msg.iv, msg.tag),
+      text: decrypt(msg.text, msg.iv, msg.tag, msg.pairId || pairId),
       read: msg.read,
       readAt: msg.readAt,
       createdAt: msg.createdAt

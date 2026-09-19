@@ -4,8 +4,16 @@ const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Strict rate limiter for authentication attempts (30 requests per 15 minutes)
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many authentication attempts. Please try again in 15 minutes.'
+});
 
 // unique pairCode generate kr rhe hai
 const generateUniquePairCode = async () => {
@@ -21,7 +29,7 @@ const generateUniquePairCode = async () => {
   return code;
 };
 
-router.post('/google', async (req, res) => {
+router.post('/google', authLimiter, async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -119,10 +127,13 @@ router.patch('/display-name', auth, async (req, res) => {
 
 // ============================================================
 // DEV-ONLY BYPASS — localhost development shortcut
-// This route is completely disabled in production.
+// Requires explicit development mode and is permanently disabled in production.
 // ============================================================
-if (process.env.NODE_ENV !== 'production') {
-  router.post('/dev-login', async (req, res) => {
+const isDevAllowed = (process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_LOGIN === 'true')
+  && process.env.NODE_ENV !== 'production';
+
+if (isDevAllowed) {
+  router.post('/dev-login', authLimiter, async (req, res) => {
     try {
       const DEV_GOOGLE_ID = 'dev_local_bypass_user';
       let user = await User.findOne({ googleId: DEV_GOOGLE_ID });

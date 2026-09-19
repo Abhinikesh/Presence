@@ -201,6 +201,10 @@ async function saveWhiteboardStroke(gameKey, stroke) {
 
     const strokes = whiteboardStrokes.get(gameKey);
     strokes.push(stroke);
+    // Cap in-memory strokes to 5,000 points to prevent memory bloat/DoS
+    if (strokes.length > 5000) {
+      strokes.splice(0, strokes.length - 5000);
+    }
 
     if (whiteboardDebounceTimers.has(gameKey)) {
       clearTimeout(whiteboardDebounceTimers.get(gameKey));
@@ -306,9 +310,34 @@ const port = process.env.PORT || 5000;
 const path = require('path');
 const fs = require('fs');
 
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5175';
-app.use(cors({ origin: clientUrl, credentials: true }));
-app.use(express.json());
+// ── HTTP Defensive Security Headers ──────────────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// ── Flexible, Secure CORS Configuration ───────────────────────────────────────
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5175,http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const corsOriginHandler = (origin, callback) => {
+  // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin)) return callback(null, true);
+  // Allow localhost / local loopback development ports
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
+  // Allow Vercel preview and production deployments for Presence
+  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return callback(null, true);
+  return callback(new Error('Blocked by CORS policy: ' + origin));
+};
+
+app.use(cors({ origin: corsOriginHandler, credentials: true }));
+app.use(express.json({ limit: '5mb' }));
 
 const authRouter = require('./routes/auth');
 const pairRouter = require('./routes/pair');
@@ -321,6 +350,7 @@ const kanbanRouter = require('./routes/kanban');
 const messagesRouter = require('./routes/messages');
 const Message = require('./models/Message');
 const { encrypt } = require('./utils/crypto');
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -341,11 +371,12 @@ app.use('/api/messages', messagesRouter);
 
 const server = http.createServer(app);
 
-// Socket.IO setup with CORS
+// Socket.IO setup with secure CORS origin validation
 const io = new Server(server, {
   cors: {
-    origin: clientUrl,
-    methods: ['GET', 'POST']
+    origin: corsOriginHandler,
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 app.set('io', io);
@@ -359,6 +390,24 @@ const pairMusicState = new Map();
 
 const tictactoeGames = new Map();
 const icebreakerGames = new Map();
+
+// Helper to wipe all in-memory pair caches on unpair
+app.set('clearPairCache', (pairId) => {
+  sharedNotesBuffer.delete(pairId);
+  if (sharedNotesDebounceTimers.has(pairId)) {
+    clearTimeout(sharedNotesDebounceTimers.get(pairId));
+    sharedNotesDebounceTimers.delete(pairId);
+  }
+  whiteboardStrokes.delete(pairId);
+  if (whiteboardDebounceTimers.has(pairId)) {
+    clearTimeout(whiteboardDebounceTimers.get(pairId));
+    whiteboardDebounceTimers.delete(pairId);
+  }
+  pairMusicState.delete(pairId);
+  tictactoeGames.delete(pairId);
+  icebreakerGames.delete(pairId);
+  lovegameGames.delete(pairId);
+});
 
 // ─── Desire Meets Discretion prompts ─────────────────────────────────────────
 const DESIRE_PROMPTS = [
@@ -427,18 +476,47 @@ function getDesirePromptIndex(recentList, category) {
 const lovegameGames = new Map();
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Socket.IO auth middleware — token verify kr rhe hai
+// In-memory rate limiting map for chat messages (userId -> { count, resetTime })
+const chatRateLimits = new Map();
+
+// Helper to verify mutual, reciprocal pairing between two users
+async function getVerifiedPair(userId) {
+  try {
+    const user = await User.findById(userId);
+    if (!user || !user.pairId) return null;
+    const partnerId = user.pairId.toString();
+    const partner = await User.findById(partnerId);
+    if (!partner || !partner.pairId || partner.pairId.toString() !== userId.toString()) {
+      return null;
+    }
+    const pairId = [userId.toString(), partnerId].sort().join('-');
+    return { user, partner, partnerId, pairId };
+  } catch (err) {
+    console.error('Error verifying pair relationship:', err);
+    return null;
+  }
+}
+
+// Socket.IO auth middleware — cryptographically verify token with algorithm pinning
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) {
     return next(new Error('Authentication error: Token missing'));
   }
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    return next(new Error('Authentication error: Server auth secret unconfigured'));
+  }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.userId = decoded.id || decoded.userId;
+    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
+    const verifiedId = decoded.id || decoded.userId;
+    if (!verifiedId) {
+      return next(new Error('Authentication error: Invalid token payload'));
+    }
+    socket.userId = verifiedId.toString();
     next();
   } catch (err) {
-    return next(new Error('Authentication error: Invalid token'));
+    return next(new Error('Authentication error: Invalid or expired token'));
   }
 });
 
@@ -1445,17 +1523,35 @@ io.on('connection', async (socket) => {
   // ── Secure Real-Time Messaging ──────────────────────────────────────────
   socket.on('chat_send_message', async (data) => {
     try {
-      const { text } = data;
-      if (!text || typeof text !== 'string' || !text.trim()) return;
+      const { text } = data || {};
+      if (!text || typeof text !== 'string') return;
 
-      const user = await User.findById(userId);
-      if (!user || !user.pairId) return;
+      // Bound message length to prevent memory bloat/DoS
+      const cleanText = text.trim().slice(0, 2000);
+      if (!cleanText) return;
 
-      const partnerId = user.pairId.toString();
-      const pairId = [userId, partnerId].sort().join('-');
+      // Rate limit check: max 6 messages per 2 seconds per user
+      const now = Date.now();
+      let userRate = chatRateLimits.get(userId);
+      if (!userRate || now > userRate.resetTime) {
+        userRate = { count: 1, resetTime: now + 2000 };
+        chatRateLimits.set(userId, userRate);
+      } else {
+        userRate.count += 1;
+        if (userRate.count > 6) {
+          socket.emit('chat_error', { error: 'Sending messages too quickly. Please slow down.' });
+          return;
+        }
+      }
 
-      // Encrypt message content with AES-256-GCM
-      const encrypted = encrypt(text.trim());
+      // Verify mutual reciprocal pair relationship before saving or sending
+      const pair = await getVerifiedPair(userId);
+      if (!pair) return;
+
+      const { partnerId, pairId } = pair;
+
+      // Encrypt message content with AES-256-GCM using isolated per-pair key
+      const encrypted = encrypt(cleanText, pairId);
 
       const newMsg = new Message({
         pairId,
@@ -1473,7 +1569,7 @@ io.on('connection', async (socket) => {
         pairId,
         sender: userId,
         recipient: partnerId,
-        text: text.trim(),
+        text: cleanText,
         read: false,
         createdAt: newMsg.createdAt
       };
@@ -1493,12 +1589,10 @@ io.on('connection', async (socket) => {
 
   socket.on('chat_mark_read', async () => {
     try {
-      const user = await User.findById(userId);
-      if (!user || !user.pairId) return;
+      const pair = await getVerifiedPair(userId);
+      if (!pair) return;
 
-      const partnerId = user.pairId.toString();
-      const pairId = [userId, partnerId].sort().join('-');
-
+      const { partnerId, pairId } = pair;
       const now = new Date();
       await Message.updateMany(
         { pairId, recipient: userId, read: false },
@@ -1519,10 +1613,10 @@ io.on('connection', async (socket) => {
 
   socket.on('chat_typing', async (data) => {
     try {
-      const user = await User.findById(userId);
-      if (!user || !user.pairId) return;
+      const pair = await getVerifiedPair(userId);
+      if (!pair) return;
 
-      const partnerId = user.pairId.toString();
+      const { partnerId } = pair;
       const partnerInfo = onlineUsers.get(partnerId);
       if (partnerInfo) {
         io.to(partnerInfo.socketId).emit('chat_partner_typing', {

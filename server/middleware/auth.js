@@ -9,8 +9,19 @@ const auth = async (req, res, next) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('CRITICAL: JWT_SECRET environment variable is missing.');
+      return res.status(500).json({ error: 'Server authentication configuration error.' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] });
+    const userId = decoded.id || decoded.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid token payload.' });
+    }
+
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(401).json({ error: 'User not found.' });
     }
