@@ -1,4 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { BACKEND_URL } from '../../config';
+
+export const resolveAudioUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  const base = (BACKEND_URL || 'http://localhost:5000').replace(/\/+$/, '');
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `${base}${path}`;
+};
 
 export function useMusicPlayer(initialTracks = []) {
   const [tracks, setTracks] = useState(initialTracks);
@@ -60,24 +72,35 @@ export function useMusicPlayer(initialTracks = []) {
     currentTrackRef.current = track;
     setCurrentTrack(track);
 
-    if (track.fileUrl) {
-      audio.src = track.fileUrl;
+    const resolvedSrc = resolveAudioUrl(track.fileUrl);
+    console.log('[MusicPlayer] loadAndPlayTrack:', {
+      title: track.title,
+      fileUrl: track.fileUrl,
+      resolvedSrc,
+      shouldPlay,
+      volume: audio.volume,
+      muted: audio.muted
+    });
+
+    if (resolvedSrc) {
+      audio.src = resolvedSrc;
       audio.load();
 
       if (shouldPlay) {
         audio.play()
           .then(() => {
+            console.log('[MusicPlayer] Playback started successfully:', audio.currentSrc);
             setIsPlaying(true);
           })
           .catch((err) => {
-            console.warn('Playback prevented or aborted:', err.message);
+            console.error('[MusicPlayer] Playback failed/blocked:', err.name, err.message, 'Source was:', audio.src);
             setIsPlaying(false);
           });
       } else {
         setIsPlaying(false);
       }
     } else {
-      // Placeholder track with no audio url
+      console.warn('[MusicPlayer] Track has no playable fileUrl:', track);
       audio.src = '';
       setIsPlaying(false);
     }
@@ -205,15 +228,29 @@ export function useMusicPlayer(initialTracks = []) {
         return;
       }
 
-      if (audio.src && audio.src === track.fileUrl) {
+      const resolvedSrc = resolveAudioUrl(track.fileUrl);
+      console.log('[MusicPlayer] togglePlayPause resume check:', {
+        audioSrc: audio.src,
+        audioCurrentSrc: audio.currentSrc,
+        resolvedSrc,
+        volume: audio.volume,
+        muted: audio.muted
+      });
+
+      if (audio.src && (audio.src === resolvedSrc || audio.currentSrc === resolvedSrc)) {
         audio.play()
-          .then(() => setIsPlaying(true))
+          .then(() => {
+            console.log('[MusicPlayer] Resumed playback:', audio.currentSrc);
+            setIsPlaying(true);
+          })
           .catch((err) => {
-            console.warn('Play interrupted:', err);
+            console.error('[MusicPlayer] Resume play failed:', err.name, err.message, 'src:', audio.src);
             setIsPlaying(false);
           });
-      } else if (track.fileUrl) {
+      } else if (resolvedSrc) {
         loadAndPlayTrack(track, true);
+      } else {
+        console.warn('[MusicPlayer] Cannot play: track has no valid fileUrl', track);
       }
     }
   }, [isPlaying, loadAndPlayTrack]);
@@ -295,8 +332,11 @@ export function useMusicPlayer(initialTracks = []) {
   // Set whole queue (e.g. from backend fetch)
   const setQueue = useCallback((newTracks) => {
     setTracks(newTracks);
-    if (!currentTrackRef.current && newTracks.length > 0) {
+    const current = currentTrackRef.current;
+    // If no current track, or current track has no playable fileUrl while incoming queue has one, adopt the first playable track
+    if ((!current || !current.fileUrl) && newTracks.length > 0 && newTracks[0]?.fileUrl) {
       setCurrentTrack(newTracks[0]);
+      currentTrackRef.current = newTracks[0];
     }
   }, []);
 
@@ -304,6 +344,8 @@ export function useMusicPlayer(initialTracks = []) {
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'metadata';
+    audio.volume = 1.0;
+    audio.muted = false;
     audioRef.current = audio;
 
     const handleTimeUpdate = () => {
@@ -319,11 +361,15 @@ export function useMusicPlayer(initialTracks = []) {
       }
     };
 
+    const handleError = (e) => {
+      console.error('[MusicPlayer] HTMLMediaElement error event:', audio.error, 'currentSrc:', audio.currentSrc, e);
+    };
+
     const handleEnded = () => {
       if (repeatModeRef.current === 'one') {
         // Repeat one track
         audio.currentTime = 0;
-        audio.play().catch(() => {});
+        audio.play().catch((err) => console.error('[MusicPlayer] Repeat 1 play failed:', err));
         setIsPlaying(true);
       } else {
         // Continuous playback: automatically advance and keep playing
@@ -336,6 +382,7 @@ export function useMusicPlayer(initialTracks = []) {
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('error', handleError);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
@@ -343,6 +390,7 @@ export function useMusicPlayer(initialTracks = []) {
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);

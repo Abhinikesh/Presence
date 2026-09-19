@@ -15,25 +15,29 @@ const SAMPLE_TRACKS = [
     _id: 'sample-1',
     title: 'Andheri Raatein',
     artist: 'Rameet',
-    duration: '3:24'
+    duration: '3:08',
+    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786386019/presence/songs/hdhppqh0jebm9swkjasp.mp3'
   },
   {
     _id: 'sample-2',
     title: 'Khuda Jaane',
     artist: 'KK, Shilpa Rao',
-    duration: '4:52'
+    duration: '4:52',
+    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786393680/presence/songs/oikaxp6fq4najorgm9pq.mp3'
   },
   {
     _id: 'sample-3',
     title: 'Soch Na Sake',
     artist: 'Amaal Mallik, Arijit Singh',
-    duration: '4:08'
+    duration: '4:08',
+    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786386019/presence/songs/hdhppqh0jebm9swkjasp.mp3'
   },
   {
     _id: 'sample-4',
     title: 'Tera Yaar Hoon Main',
     artist: 'Arijit Singh',
-    duration: '5:01'
+    duration: '5:01',
+    fileUrl: 'https://res.cloudinary.com/dcz4tgtft/video/upload/v1786393680/presence/songs/oikaxp6fq4najorgm9pq.mp3'
   }
 ];
 
