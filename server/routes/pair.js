@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const PairState = require('../models/PairState');
 const KanbanCard = require('../models/KanbanCard');
+const Message = require('../models/Message');
 const auth = require('../middleware/auth');
 
 router.post('/connect', auth, async (req, res) => {
@@ -81,6 +82,7 @@ router.post('/unpair', auth, async (req, res) => {
     const pairId = [currentUser._id.toString(), currentUser.pairId.toString()].sort().join('-');
     await PairState.deleteOne({ pairId });
     await KanbanCard.deleteMany({ pairId });
+    await Message.deleteMany({ pairId });
 
     const partner = await User.findById(currentUser.pairId);
     if (partner) {

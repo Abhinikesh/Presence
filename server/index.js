@@ -318,6 +318,9 @@ const notesRouter = require('./routes/notes');
 const tasksRouter = require('./routes/tasks');
 const pairStateRouter = require('./routes/pairState');
 const kanbanRouter = require('./routes/kanban');
+const messagesRouter = require('./routes/messages');
+const Message = require('./models/Message');
+const { encrypt } = require('./utils/crypto');
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -334,6 +337,7 @@ app.use('/api/notes', notesRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/pair-state', pairStateRouter);
 app.use('/api/kanban', kanbanRouter);
+app.use('/api/messages', messagesRouter);
 
 const server = http.createServer(app);
 
@@ -1257,6 +1261,98 @@ io.on('connection', async (socket) => {
       emitDesirePrompt(gameKey, game, userInfo, partnerInfo);
     } catch (err) {
       console.error('desire_change_category error:', err);
+    }
+  });
+
+  // ── Secure Real-Time Messaging ──────────────────────────────────────────
+  socket.on('chat_send_message', async (data) => {
+    try {
+      const { text } = data;
+      if (!text || typeof text !== 'string' || !text.trim()) return;
+
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+
+      const partnerId = user.pairId.toString();
+      const pairId = [userId, partnerId].sort().join('-');
+
+      // Encrypt message content with AES-256-GCM
+      const encrypted = encrypt(text.trim());
+
+      const newMsg = new Message({
+        pairId,
+        sender: userId,
+        recipient: partnerId,
+        text: encrypted.ciphertext,
+        iv: encrypted.iv,
+        tag: encrypted.tag,
+        read: false
+      });
+      await newMsg.save();
+
+      const messagePayload = {
+        _id: newMsg._id,
+        pairId,
+        sender: userId,
+        recipient: partnerId,
+        text: text.trim(),
+        read: false,
+        createdAt: newMsg.createdAt
+      };
+
+      // Confirm to sender
+      socket.emit('chat_message_sent', messagePayload);
+
+      // Emit to partner if online
+      const partnerInfo = onlineUsers.get(partnerId);
+      if (partnerInfo) {
+        io.to(partnerInfo.socketId).emit('chat_receive_message', messagePayload);
+      }
+    } catch (err) {
+      console.error(`chat_send_message error for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('chat_mark_read', async () => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+
+      const partnerId = user.pairId.toString();
+      const pairId = [userId, partnerId].sort().join('-');
+
+      const now = new Date();
+      await Message.updateMany(
+        { pairId, recipient: userId, read: false },
+        { $set: { read: true, readAt: now } }
+      );
+
+      const partnerInfo = onlineUsers.get(partnerId);
+      if (partnerInfo) {
+        io.to(partnerInfo.socketId).emit('chat_messages_read', {
+          readBy: userId,
+          readAt: now
+        });
+      }
+    } catch (err) {
+      console.error(`chat_mark_read error for user ${userId}:`, err);
+    }
+  });
+
+  socket.on('chat_typing', async (data) => {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.pairId) return;
+
+      const partnerId = user.pairId.toString();
+      const partnerInfo = onlineUsers.get(partnerId);
+      if (partnerInfo) {
+        io.to(partnerInfo.socketId).emit('chat_partner_typing', {
+          isTyping: !!data?.isTyping
+        });
+      }
+    } catch (err) {
+      console.error(`chat_typing error for user ${userId}:`, err);
     }
   });
 

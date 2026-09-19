@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import { BACKEND_URL } from '../config';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { ChatIcon, ChatBox, useMessaging } from '../messaging';
 
 // ── Background colour palette (medium tones) ────────────────────
 const BG_PALETTE = [
@@ -151,6 +152,22 @@ function Home() {
   const [uploadError, setUploadError] = useState('');
 
   const [isConnected, setIsConnected] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  const {
+    messages,
+    unreadCount,
+    isPartnerTyping,
+    sendMessage,
+    sendTyping
+  } = useMessaging({
+    socket: socketRef.current,
+    isConnected,
+    token,
+    currentUser: user,
+    partner: { name: partnerName },
+    isChatOpen
+  });
 
   const audioRef = useRef(null);
 
@@ -2604,16 +2621,38 @@ function Home() {
             )}
           </div>
 
-          <button
-            className="btn-settings"
-            title="Settings"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Open settings"
-          >
-            <GearIcon size={17} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ChatIcon
+              unreadCount={unreadCount}
+              isOpen={isChatOpen}
+              onClick={() => setIsChatOpen((prev) => !prev)}
+            />
+
+            <button
+              className="btn-settings"
+              title="Settings"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open settings"
+            >
+              <GearIcon size={17} />
+            </button>
+          </div>
         </div>
       </nav>
+
+      {/* ── Direct Chat Popover (Background remains freely scrollable) ── */}
+      {isChatOpen && (
+        <ChatBox
+          partnerName={partnerName}
+          partnerOnline={partnerOnline}
+          currentUser={user}
+          messages={messages}
+          isPartnerTyping={isPartnerTyping}
+          onSendMessage={sendMessage}
+          onSendTyping={sendTyping}
+          onClose={() => setIsChatOpen(false)}
+        />
+      )}
 
       <div className="home-content-container">
         
