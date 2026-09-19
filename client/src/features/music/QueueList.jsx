@@ -10,6 +10,7 @@ import {
 
 export default function QueueList({
   tracks = [],
+  totalCount,
   activeTrackId,
   isUploading = false,
   uploadError = '',
@@ -20,6 +21,7 @@ export default function QueueList({
   onRemoveTrack
 }) {
   const fileInputRef = useRef(null);
+  const displayCount = totalCount !== undefined ? totalCount : tracks.length;
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -40,7 +42,7 @@ export default function QueueList({
         <div className="music-queue-title-wrap">
           <h3 className="music-queue-title">Queue</h3>
           <span className="music-queue-count">
-            {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
+            {displayCount} {displayCount === 1 ? 'track' : 'tracks'}
           </span>
         </div>
 
@@ -77,8 +79,10 @@ export default function QueueList({
         {tracks.length === 0 ? (
           <div className="music-queue-empty">
             <MusicNoteIcon size={36} color="var(--text-secondary, #9CA3AF)" />
-            <p style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Your queue is empty</p>
-            <p style={{ fontSize: '0.8125rem' }}>Click Upload above to add songs to your shared queue.</p>
+            <p style={{ fontWeight: 600, color: 'var(--text-primary)' }}>No tracks found</p>
+            <p style={{ fontSize: '0.8125rem' }}>
+              {displayCount === 0 ? 'Click Upload above to add songs to your shared queue.' : 'No tracks match your search filter.'}
+            </p>
           </div>
         ) : (
           tracks.map((track, index) => {
@@ -130,13 +134,12 @@ export default function QueueList({
                   <button
                     type="button"
                     className="music-action-btn"
-                    onClick={() => onMoveUp?.(index)}
+                    onClick={() => onMoveUp?.(track, index)}
                     disabled={index === 0}
                     style={{ opacity: index === 0 ? 0.35 : 1 }}
-                    title="Move up in queue (TODO: wire up in follow-up)"
+                    title="Move up in queue"
                     aria-label="Move track up"
                   >
-                    {/* TODO: Wire up queue reordering logic in follow-up prompt */}
                     <ArrowUpIcon size={16} />
                   </button>
 
@@ -144,13 +147,12 @@ export default function QueueList({
                   <button
                     type="button"
                     className="music-action-btn"
-                    onClick={() => onMoveDown?.(index)}
+                    onClick={() => onMoveDown?.(track, index)}
                     disabled={index === tracks.length - 1}
                     style={{ opacity: index === tracks.length - 1 ? 0.35 : 1 }}
-                    title="Move down in queue (TODO: wire up in follow-up)"
+                    title="Move down in queue"
                     aria-label="Move track down"
                   >
-                    {/* TODO: Wire up queue reordering logic in follow-up prompt */}
                     <ArrowDownIcon size={16} />
                   </button>
 
@@ -159,10 +161,9 @@ export default function QueueList({
                     type="button"
                     className="music-action-btn delete-btn"
                     onClick={() => onRemoveTrack?.(track)}
-                    title="Remove from queue (TODO: wire up in follow-up)"
+                    title="Remove from queue"
                     aria-label="Remove track"
                   >
-                    {/* TODO: Wire up queue deletion logic in follow-up prompt */}
                     <CloseIcon size={16} />
                   </button>
                 </div>

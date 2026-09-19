@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../config';
+import { useMusicPlayer } from './useMusicPlayer';
 import NowPlayingHero from './NowPlayingHero';
 import SearchBar from './SearchBar';
 import QueueList from './QueueList';
@@ -38,7 +39,7 @@ const SAMPLE_TRACKS = [
 
 export default function MusicPage() {
   const navigate = useNavigate();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   // ── Dynamic Theme Integration (Uses existing localStorage & CSS variables) ──
   const [bgColor, setBgColor] = useState(
@@ -61,10 +62,29 @@ export default function MusicPage() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // ── Tracks & Queue State ──
-  const [songs, setSongs] = useState([]);
-  const [activeTrack, setActiveTrack] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // ── Playback Engine Hook ──
+  const {
+    tracks,
+    currentTrack,
+    isPlaying,
+    currentTime,
+    duration,
+    isShuffle,
+    repeatMode,
+    togglePlayPause,
+    nextTrack,
+    prevTrack,
+    playTrack,
+    seek,
+    toggleShuffle,
+    cycleRepeat,
+    moveUp,
+    moveDown,
+    removeTrack,
+    setQueue
+  } = useMusicPlayer(SAMPLE_TRACKS);
+
+  // ── Search Query State ──
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -79,21 +99,16 @@ export default function MusicPage() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.length > 0) {
-          setSongs(data);
-          setActiveTrack(data[0]);
+          setQueue(data);
         } else {
-          // If no songs uploaded yet, display sample queue from reference design
-          setSongs(SAMPLE_TRACKS);
-          setActiveTrack(SAMPLE_TRACKS[0]);
+          setQueue(SAMPLE_TRACKS);
         }
       } else {
-        setSongs(SAMPLE_TRACKS);
-        setActiveTrack(SAMPLE_TRACKS[0]);
+        setQueue(SAMPLE_TRACKS);
       }
     } catch (err) {
       console.error('Error fetching songs for Music page:', err);
-      setSongs(SAMPLE_TRACKS);
-      setActiveTrack(SAMPLE_TRACKS[0]);
+      setQueue(SAMPLE_TRACKS);
     }
   };
 
@@ -139,62 +154,32 @@ export default function MusicPage() {
     }
   };
 
-  // Handlers for transport controls
-  const handlePlayPause = () => {
-    // TODO: Wire up real HTML5 audio playback and synced partner playback in follow-up prompt
-    setIsPlaying((prev) => !prev);
-  };
-
-  const handleNext = () => {
-    // TODO: Wire up next track in queue logic in follow-up prompt
-    const currentIndex = songs.findIndex((s) => s._id === activeTrack?._id);
-    if (currentIndex >= 0 && currentIndex < songs.length - 1) {
-      setActiveTrack(songs[currentIndex + 1]);
-    } else if (songs.length > 0) {
-      setActiveTrack(songs[0]);
+  // Reorder handlers that map through track IDs for robustness
+  const handleMoveUp = (track) => {
+    const idx = tracks.findIndex((t) => t._id === track._id);
+    if (idx > 0) {
+      moveUp(idx);
     }
   };
 
-  const handlePrev = () => {
-    // TODO: Wire up previous track in queue logic in follow-up prompt
-    const currentIndex = songs.findIndex((s) => s._id === activeTrack?._id);
-    if (currentIndex > 0) {
-      setActiveTrack(songs[currentIndex - 1]);
+  const handleMoveDown = (track) => {
+    const idx = tracks.findIndex((t) => t._id === track._id);
+    if (idx >= 0 && idx < tracks.length - 1) {
+      moveDown(idx);
     }
   };
 
-  const handleSelectTrack = (track) => {
-    // TODO: Wire up track switching and audio src loading in follow-up prompt
-    setActiveTrack(track);
-    setIsPlaying(true);
-  };
-
-  const handleMoveUp = (index) => {
-    // TODO: Wire up queue reordering and socket sync in follow-up prompt
-    if (index <= 0) return;
-    const reordered = [...songs];
-    const [moved] = reordered.splice(index, 1);
-    reordered.splice(index - 1, 0, moved);
-    setSongs(reordered);
-  };
-
-  const handleMoveDown = (index) => {
-    // TODO: Wire up queue reordering and socket sync in follow-up prompt
-    if (index >= songs.length - 1) return;
-    const reordered = [...songs];
-    const [moved] = reordered.splice(index, 1);
-    reordered.splice(index + 1, 0, moved);
-    setSongs(reordered);
-  };
-
-  const handleRemoveTrack = async (track) => {
-    // TODO: Wire up persistent queue item deletion in follow-up prompt
-    setSongs((prev) => prev.filter((s) => s._id !== track._id));
-    if (activeTrack?._id === track._id) {
-      const remaining = songs.filter((s) => s._id !== track._id);
-      setActiveTrack(remaining[0] || null);
-    }
-  };
+  // Live search filtering (filters view without mutating underlying queue/playback)
+  const visibleTracks = useMemo(() => {
+    if (!searchQuery.trim()) return tracks;
+    const q = searchQuery.toLowerCase().trim();
+    return tracks.filter(
+      (t) =>
+        (t.title && t.title.toLowerCase().includes(q)) ||
+        (t.artist && t.artist.toLowerCase().includes(q)) ||
+        (t.uploaderName && t.uploaderName.toLowerCase().includes(q))
+    );
+  }, [tracks, searchQuery]);
 
   const isDarkBg = ['#1C1F26'].includes(bgColor);
 
@@ -233,22 +218,23 @@ export default function MusicPage() {
           </p>
         </header>
 
-        {/* 1. Now Playing Hero Card */}
+        {/* 1. Now Playing Hero Card (Interactive Scrubber & Real Transport Engine) */}
         <NowPlayingHero
-          currentTrack={activeTrack}
+          currentTrack={currentTrack}
           isPlaying={isPlaying}
-          currentTime="1:02"
-          duration={activeTrack?.duration || '3:24'}
-          progressPercent={32}
-          onPlayPause={handlePlayPause}
-          onNext={handleNext}
-          onPrev={handlePrev}
-          onShuffle={() => { /* TODO: Toggle shuffle in follow-up */ }}
-          onRepeat={() => { /* TODO: Toggle repeat in follow-up */ }}
+          currentTime={currentTime}
+          duration={duration}
+          isShuffle={isShuffle}
+          repeatMode={repeatMode}
+          onPlayPause={togglePlayPause}
+          onNext={nextTrack}
+          onPrev={prevTrack}
+          onShuffle={toggleShuffle}
+          onRepeat={cycleRepeat}
+          onSeek={seek}
         />
 
-        {/* 2. Search Bar */}
-        {/* TODO: Wire up real-time search query filtering on queue tracks in follow-up prompt */}
+        {/* 2. Live Search Bar */}
         <SearchBar
           value={searchQuery}
           onChange={setSearchQuery}
@@ -256,15 +242,16 @@ export default function MusicPage() {
 
         {/* 3. Queue / Track List */}
         <QueueList
-          tracks={songs}
-          activeTrackId={activeTrack?._id}
+          tracks={visibleTracks}
+          totalCount={tracks.length}
+          activeTrackId={currentTrack?._id}
           isUploading={isUploading}
           uploadError={uploadError}
           onUploadSong={handleUploadSong}
-          onSelectTrack={handleSelectTrack}
+          onSelectTrack={playTrack}
           onMoveUp={handleMoveUp}
           onMoveDown={handleMoveDown}
-          onRemoveTrack={handleRemoveTrack}
+          onRemoveTrack={removeTrack}
         />
       </div>
     </div>
