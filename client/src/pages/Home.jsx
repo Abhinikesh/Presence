@@ -3714,150 +3714,75 @@ function Home() {
           <div id="section-music" className="feature-card card-accent-music" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>
             <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Music <span style={{ fontSize: '0.75rem', color: '#E8623F', fontWeight: 'bold', textTransform: 'uppercase' }}>Synced Player</span></span>
-              <button onClick={() => setTheaterMode('music')} title="Theater mode" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-              </button>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{songs.length} {songs.length === 1 ? 'song' : 'songs'}</span>
             </h2>
-            
-            <div className="form-group mt-2">
-              <label className="form-label">Upload Song (MP3/WAV, max 15MB)</label>
-              {isUploading ? (
-                <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Uploading...</div>
-              ) : (
-                <input
-                  type="file"
-                  accept=".mp3,.wav,audio/mpeg,audio/wav"
-                  onChange={handleFileUpload}
-                  className="input-text"
-                  style={{ padding: '8px 12px' }}
-                />
-              )}
-              {uploadError && <div style={{ color: '#EF4444', fontSize: '0.8125rem', marginTop: '4px' }}>{uploadError}</div>}
-            </div>
 
-            <div style={{ marginTop: '16px' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>
-                Shared Songs ({songs.length})
-              </h3>
-              {isSongsLoading ? (
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Loading songs...</p>
-              ) : songs.length === 0 ? (
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>No songs uploaded yet.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-                  {songs.map((song) => {
-                    const isSelected = currentSong && currentSong._id === song._id;
-                    const isOwner = song.uploadedBy === user?._id ||
-                                   song.uploadedBy?._id === user?._id ||
-                                   song.uploadedBy?.toString() === user?._id?.toString();
-                    return (
-                      <div
-                        key={song._id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
-                          border: isSelected ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius)',
-                          backgroundColor: isSelected ? '#F0FDFA' : 'white',
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        {/* Song icon */}
-                        <span style={{ fontSize: '1rem', flexShrink: 0 }}>{isSelected && isPlaying ? '🎵' : '🎶'}</span>
-
-                        {/* Title */}
-                        <span style={{
-                          fontSize: '0.8125rem',
-                          fontWeight: isSelected ? '600' : '400',
-                          flex: 1,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          color: isSelected ? 'var(--accent-color)' : 'var(--text-primary)'
-                        }}>
-                          {song.title}
-                        </span>
-
-                        {/* Play button */}
-                        <button
-                          onClick={() => handleSelectSong(song)}
-                          className="btn"
-                          style={{
-                            width: 'auto', padding: '3px 10px',
-                            fontSize: '0.75rem', flexShrink: 0,
-                            backgroundColor: isSelected ? 'var(--accent-color)' : 'transparent',
-                            color: isSelected ? 'white' : 'var(--text-secondary)',
-                            borderColor: isSelected ? 'var(--accent-color)' : 'var(--border-color)'
-                          }}
-                        >
-                          {isSelected && isPlaying ? 'Playing' : 'Play'}
-                        </button>
-
-                        {/* Delete button — only for uploader */}
-                        {isOwner && (
-                          <button
-                            onClick={() => handleDeleteSong(song)}
-                            title="Delete song"
-                            style={{
-                              background: 'none', border: '1px solid transparent',
-                              cursor: 'pointer', color: '#D1D5DB',
-                              fontSize: '0.8rem', padding: '3px 6px',
-                              borderRadius: '5px', flexShrink: 0,
-                              transition: 'all 0.15s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.borderColor = '#FECACA'; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = '#D1D5DB'; e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = 'transparent'; }}
-                          >✕</button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {currentSong && (
+            <div style={{
+              marginTop: '16px',
+              padding: '16px',
+              borderRadius: 'var(--radius)',
+              backgroundColor: 'rgba(232, 98, 63, 0.06)',
+              border: '1px solid rgba(232, 98, 63, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px'
+            }}>
               <div style={{
-                marginTop: '16px',
-                padding: '16px',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius)',
-                backgroundColor: '#FAFAFA'
+                width: '46px',
+                height: '46px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #7C3AED 0%, #E8623F 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#FFFFFF',
+                flexShrink: 0,
+                boxShadow: '0 4px 12px rgba(232, 98, 63, 0.25)'
               }}>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Now Playing</p>
-                <h4 style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '12px', wordBreak: 'break-all', color: 'var(--text-primary)' }}>
-                  {currentSong.title}
-                </h4>
-
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  value={currentTime || 0}
-                  onChange={handleSeek}
-                  style={{
-                    width: '100%',
-                    margin: '8px 0',
-                    cursor: 'pointer',
-                    accentColor: 'var(--accent-color)'
-                  }}
-                />
-
-                <div style={{ display: 'flex', justifycontent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                  <span>{formatTime(currentTime)}</span>
-                  <span style={{ marginLeft: 'auto' }}>{formatTime(duration)}</span>
-                </div>
-
-                <button
-                  onClick={handlePlayPause}
-                  className="btn btn-primary"
-                >
-                  {isPlaying ? 'Pause' : 'Play'}
-                </button>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18V5l12-2v13" />
+                  <circle cx="6" cy="18" r="3" />
+                  <circle cx="18" cy="16" r="3" />
+                </svg>
               </div>
-            )}
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-color)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {isPlaying ? 'Now Playing' : 'Queued Track'}
+                </div>
+                <div style={{
+                  fontSize: '0.9375rem',
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {currentSong ? currentSong.title : (songs[0]?.title || 'Andheri Raatein')}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate('/music')}
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                marginTop: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="6 3 20 12 6 21 6 3" />
+              </svg>
+              <span>Open Full Music Player</span>
+            </button>
           </div>
 
           <div id="section-watch" className="feature-card card-accent-watch" onMouseMove={handleTiltMove} onMouseLeave={handleTiltLeave}>

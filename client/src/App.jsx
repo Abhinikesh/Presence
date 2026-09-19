@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Pair from './pages/Pair';
 import Home from './pages/Home';
+import { MusicPage } from './features/music';
 
 // sirf logged-in users ke liye route
 function ProtectedRoute({ children }) {
@@ -53,6 +54,7 @@ function App() {
           <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/pair" element={<ProtectedRoute><Pair /></ProtectedRoute>} />
           <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/music" element={<ProtectedRoute><MusicPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
