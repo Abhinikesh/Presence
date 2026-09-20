@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import { BACKEND_URL } from '../config';
 import { useSocket } from '../context/SocketContext';
+import { useNotification } from '../context/NotificationContext';
 import { useMusic, MiniPlayerBar } from '../features/music';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { ChatIcon, ChatBox, useMessaging } from '../messaging';
@@ -69,7 +70,15 @@ function Home() {
   const toastIdRef = useRef(0);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const socketRef = useRef(null);
+
+  // Auto-open chat if navigated with ?chat=true
+  useEffect(() => {
+    if (location.search.includes('chat=true')) {
+      setIsChatOpen(true);
+    }
+  }, [location.search]);
 
   // ── Settings state — persisted in localStorage + DB ──
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -158,6 +167,8 @@ function Home() {
   const [isConnected, setIsConnected] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  const { showNotification } = useNotification();
+
   const {
     messages,
     unreadCount,
@@ -170,7 +181,16 @@ function Home() {
     token,
     currentUser: user,
     partner: { name: partnerName },
-    isChatOpen
+    isChatOpen,
+    onNewMessage: (msg) => {
+      showNotification({
+        type: 'message',
+        title: partnerName || 'Your partner',
+        message: msg.text || 'Sent you a message',
+        avatarText: (partnerName || 'P').charAt(0).toUpperCase(),
+        onClick: () => setIsChatOpen(true)
+      });
+    }
   });
 
   const audioRef = useRef(null);

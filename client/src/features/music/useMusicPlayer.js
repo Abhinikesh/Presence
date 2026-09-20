@@ -12,15 +12,42 @@ export const resolveAudioUrl = (url) => {
   return `${base}${path}`;
 };
 
+const STORAGE_KEY = 'presence_music_playback_state';
+
+const getInitialSavedState = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+};
+
 export function useMusicPlayer(initialTracks = []) {
+  const savedStateRef = useRef(getInitialSavedState());
+  const initialSaved = savedStateRef.current;
+
   const [tracks, setTracks] = useState(initialTracks);
-  const [currentTrack, setCurrentTrack] = useState(initialTracks[0] || null);
+  const [currentTrack, setCurrentTrack] = useState(() => {
+    if (initialSaved?.track) return initialSaved.track;
+    return initialTracks[0] || null;
+  });
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isShuffle, setIsShuffle] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => {
+    return typeof initialSaved?.currentTime === 'number' ? initialSaved.currentTime : 0;
+  });
+  const [duration, setDuration] = useState(() => {
+    return typeof initialSaved?.duration === 'number' ? initialSaved.duration : 0;
+  });
+  const [isShuffle, setIsShuffle] = useState(() => {
+    return initialSaved?.isShuffle !== undefined ? initialSaved.isShuffle : false;
+  });
   // Repeat mode: 'off' | 'all' | 'one'
-  const [repeatMode, setRepeatMode] = useState('all');
+  const [repeatMode, setRepeatMode] = useState(() => {
+    return initialSaved?.repeatMode || 'all';
+  });
 
   const audioRef = useRef(null);
   const tracksRef = useRef(tracks);
@@ -28,7 +55,9 @@ export function useMusicPlayer(initialTracks = []) {
   const isShuffleRef = useRef(isShuffle);
   const repeatModeRef = useRef(repeatMode);
   const isPlayingRef = useRef(isPlaying);
+  const currentTimeRef = useRef(currentTime);
   const playedIndicesRef = useRef(new Set());
+  const lastSaveRef = useRef(0);
 
   // Keep refs synchronized
   useEffect(() => {
@@ -51,8 +80,12 @@ export function useMusicPlayer(initialTracks = []) {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
   // Load and play track helper
-  const loadAndPlayTrack = useCallback((track, shouldPlay = true) => {
+  const loadAndPlayTrack = useCallback((track, shouldPlay = true, startTime = undefined) => {
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -63,12 +96,14 @@ export function useMusicPlayer(initialTracks = []) {
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
       return;
     }
 
     // Fully pause and reset before loading new track to avoid race conditions
     audio.pause();
-    setCurrentTime(0);
+    const targetTime = typeof startTime === 'number' ? startTime : 0;
+    setCurrentTime(targetTime);
     currentTrackRef.current = track;
     setCurrentTrack(track);
 
@@ -78,13 +113,23 @@ export function useMusicPlayer(initialTracks = []) {
       fileUrl: track.fileUrl,
       resolvedSrc,
       shouldPlay,
+      targetTime,
       volume: audio.volume,
       muted: audio.muted
     });
 
     if (resolvedSrc) {
-      audio.src = resolvedSrc;
-      audio.load();
+      const currentSrcResolved = audio.currentSrc || audio.src;
+      if (!currentSrcResolved || !currentSrcResolved.includes(track.fileUrl)) {
+        audio.src = resolvedSrc;
+        audio.load();
+      }
+
+      if (targetTime > 0) {
+        try {
+          audio.currentTime = targetTime;
+        } catch (_) {}
+      }
 
       if (shouldPlay) {
         audio.play()
@@ -93,7 +138,7 @@ export function useMusicPlayer(initialTracks = []) {
             setIsPlaying(true);
           })
           .catch((err) => {
-            console.error('[MusicPlayer] Playback failed/blocked:', err.name, err.message, 'Source was:', audio.src);
+            console.warn('[MusicPlayer] Playback failed/blocked:', err.name, err.message, 'Source was:', audio.src);
             setIsPlaying(false);
           });
       } else {
@@ -248,7 +293,7 @@ export function useMusicPlayer(initialTracks = []) {
             setIsPlaying(false);
           });
       } else if (resolvedSrc) {
-        loadAndPlayTrack(track, true);
+        loadAndPlayTrack(track, true, currentTimeRef.current || 0);
       } else {
         console.warn('[MusicPlayer] Cannot play: track has no valid fileUrl', track);
       }
@@ -267,6 +312,21 @@ export function useMusicPlayer(initialTracks = []) {
     const clamped = Math.max(0, Math.min(timeSeconds, duration || audio.duration || 0));
     audio.currentTime = clamped;
     setCurrentTime(clamped);
+
+    if (currentTrackRef.current) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          track: currentTrackRef.current,
+          trackId: currentTrackRef.current._id,
+          currentTime: clamped,
+          duration: duration || audio.duration || 0,
+          isPlaying: isPlayingRef.current,
+          isShuffle: isShuffleRef.current,
+          repeatMode: repeatModeRef.current,
+          timestamp: Date.now()
+        }));
+      } catch (_) {}
+    }
   }, [duration]);
 
   // Toggle Shuffle
@@ -311,6 +371,7 @@ export function useMusicPlayer(initialTracks = []) {
 
   // Queue Item Removal
   const removeTrack = useCallback((trackToRemove) => {
+    if (!trackToRemove) return;
     setTracks((prev) => {
       const filtered = prev.filter((t) => t._id !== trackToRemove._id);
 
@@ -333,6 +394,29 @@ export function useMusicPlayer(initialTracks = []) {
   const setQueue = useCallback((newTracks) => {
     setTracks(newTracks);
     const current = currentTrackRef.current;
+    const saved = savedStateRef.current;
+
+    // 1. If we have a saved track from previous session, prioritize matching it in incoming tracks
+    if (saved?.trackId && Array.isArray(newTracks)) {
+      const savedMatch = newTracks.find((t) => t._id === saved.trackId);
+      if (savedMatch) {
+        setCurrentTrack(savedMatch);
+        currentTrackRef.current = savedMatch;
+        return;
+      }
+    }
+
+    // 2. If current matches an incoming track, adopt updated metadata
+    if (current && Array.isArray(newTracks)) {
+      const currentMatch = newTracks.find((t) => t._id === current._id);
+      if (currentMatch) {
+        setCurrentTrack(currentMatch);
+        currentTrackRef.current = currentMatch;
+        return;
+      }
+    }
+
+    // 3. Fallback: replace sample track with first real track
     const isSample = !current || !current._id || String(current._id).startsWith('sample-');
     const hasRealTrack = Array.isArray(newTracks) && newTracks.some((t) => t && t._id && !String(t._id).startsWith('sample-'));
 
@@ -351,16 +435,60 @@ export function useMusicPlayer(initialTracks = []) {
     audio.muted = false;
     audioRef.current = audio;
 
+    const saved = savedStateRef.current;
+    const initialTrackToLoad = currentTrackRef.current || saved?.track;
+    if (initialTrackToLoad && initialTrackToLoad.fileUrl) {
+      const resolved = resolveAudioUrl(initialTrackToLoad.fileUrl);
+      if (resolved) {
+        audio.src = resolved;
+        audio.load();
+      }
+    }
+
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
       if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
         setDuration(audio.duration);
+      }
+
+      // Throttled persistence (save every 1 second)
+      const now = Date.now();
+      if (now - lastSaveRef.current > 1000 && currentTrackRef.current) {
+        lastSaveRef.current = now;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            track: currentTrackRef.current,
+            trackId: currentTrackRef.current._id,
+            currentTime: audio.currentTime,
+            duration: audio.duration || 0,
+            isPlaying: isPlayingRef.current,
+            isShuffle: isShuffleRef.current,
+            repeatMode: repeatModeRef.current,
+            timestamp: now
+          }));
+        } catch (_) {}
       }
     };
 
     const handleLoadedMetadata = () => {
       if (!isNaN(audio.duration) && isFinite(audio.duration)) {
         setDuration(audio.duration);
+      }
+
+      const targetTime = savedStateRef.current?.currentTime;
+      if (typeof targetTime === 'number' && targetTime > 0) {
+        try {
+          audio.currentTime = targetTime;
+          setCurrentTime(targetTime);
+        } catch (_) {}
+      }
+
+      if (savedStateRef.current?.isPlaying) {
+        audio.play().then(() => {
+          setIsPlaying(true);
+        }).catch(() => {
+          setIsPlaying(false);
+        });
       }
     };
 
@@ -390,7 +518,29 @@ export function useMusicPlayer(initialTracks = []) {
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
 
+    const handleUnload = () => {
+      try {
+        if (currentTrackRef.current && audio) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            track: currentTrackRef.current,
+            trackId: currentTrackRef.current._id,
+            currentTime: audio.currentTime || 0,
+            duration: audio.duration || 0,
+            isPlaying: isPlayingRef.current,
+            isShuffle: isShuffleRef.current,
+            repeatMode: repeatModeRef.current,
+            timestamp: Date.now()
+          }));
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('error', handleError);

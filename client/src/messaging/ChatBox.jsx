@@ -18,6 +18,7 @@ export default function ChatBox({
   onClose
 }) {
   const [inputText, setInputText] = useState('');
+  const popoverRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -27,10 +28,60 @@ export default function ChatBox({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isPartnerTyping]);
 
-  // Focus input on mount
+  // Focus input on mount only on desktop non-touch devices
   useEffect(() => {
-    inputRef.current?.focus();
+    if (window.innerWidth > 640 && !('ontouchstart' in window)) {
+      inputRef.current?.focus();
+    }
   }, []);
+
+  // Lock body scroll while chat is open on mobile
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 640) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, []);
+
+  // Dynamic visualViewport height for mobile keyboard
+  useEffect(() => {
+    const handleViewportChange = () => {
+      if (typeof window !== 'undefined' && popoverRef.current) {
+        if (window.innerWidth <= 640) {
+          const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+          popoverRef.current.style.setProperty('--pm-viewport-height', `${vh}px`);
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          popoverRef.current.style.removeProperty('--pm-viewport-height');
+        }
+      }
+    };
+
+    handleViewportChange();
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
+    }
+    window.addEventListener('resize', handleViewportChange);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, []);
+
+  const handleInputFocus = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 250);
+  };
 
   const handleInputChange = (e) => {
     const val = e.target.value;
@@ -60,10 +111,22 @@ export default function ChatBox({
   const partnerInitial = (partnerName || 'P').charAt(0).toUpperCase();
 
   return (
-    <div className="pm-popover" role="dialog" aria-label="Direct Chat">
+    <div ref={popoverRef} className="pm-popover" role="dialog" aria-label="Direct Chat">
       {/* Header */}
       <div className="pm-header">
         <div className="pm-header-user">
+          {/* Mobile Back Button */}
+          <button
+            type="button"
+            className="pm-back-btn"
+            onClick={onClose}
+            title="Back"
+            aria-label="Back to page"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
           <div className="pm-avatar">{partnerInitial}</div>
           <div className="pm-header-info">
             <span className="pm-header-name">{partnerName || 'Partner'}</span>
@@ -160,6 +223,7 @@ export default function ChatBox({
             placeholder="Type a message..."
             value={inputText}
             onChange={handleInputChange}
+            onFocus={handleInputFocus}
           />
           <button
             type="submit"

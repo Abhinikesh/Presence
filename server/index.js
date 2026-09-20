@@ -731,7 +731,11 @@ io.on('connection', async (socket) => {
 
         const partnerInfo = onlineUsers.get(user.pairId.toString());
         if (partnerInfo) {
-          io.to(partnerInfo.socketId).emit('music:sync_play', { track, currentTime });
+          io.to(partnerInfo.socketId).emit('music:sync_play', {
+            track,
+            currentTime,
+            senderName: user.name || user.displayName || 'Your partner'
+          });
         }
       }
     } catch (err) {
@@ -810,7 +814,8 @@ io.on('connection', async (socket) => {
             autoPlay,
             currentTime,
             isShuffle,
-            repeatMode
+            repeatMode,
+            senderName: user.name || user.displayName || 'Your partner'
           });
         }
       }

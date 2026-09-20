@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import { useNotification } from '../../context/NotificationContext';
 import { BACKEND_URL } from '../../config';
 import { useMusicPlayer } from './useMusicPlayer';
 
@@ -40,6 +41,7 @@ const DEFAULT_SAMPLE_TRACKS = [
 export function MusicProvider({ children }) {
   const { token, user } = useAuth();
   const { socket, isConnected } = useSocket();
+  const { showNotification } = useNotification();
 
   const player = useMusicPlayer(DEFAULT_SAMPLE_TRACKS);
   const {
@@ -158,6 +160,21 @@ export function MusicProvider({ children }) {
           playerSeek(data.currentTime);
         }
       }
+
+      if (data?.track) {
+        const sender = data.senderName || 'Your partner';
+        const title = data.track.title || 'Track';
+        showNotification({
+          type: 'music',
+          title: `🎵 ${sender} started playing`,
+          message: title,
+          onClick: () => {
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/music')) {
+              window.location.href = '/music';
+            }
+          }
+        });
+      }
     };
 
     const handleSyncPause = (data) => {
@@ -193,6 +210,19 @@ export function MusicProvider({ children }) {
         if (typeof data.currentTime === 'number' && data.currentTime > 0) {
           playerSeek(data.currentTime);
         }
+
+        const sender = data.senderName || 'Your partner';
+        const title = data.track.title || 'Track';
+        showNotification({
+          type: 'music',
+          title: `🎵 ${sender} changed track`,
+          message: title,
+          onClick: () => {
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/music')) {
+              window.location.href = '/music';
+            }
+          }
+        });
       }
     };
 

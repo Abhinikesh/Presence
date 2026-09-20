@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BACKEND_URL } from '../config';
 
-export function useMessaging({ socket, isConnected, token, currentUser, partner, isChatOpen }) {
+export function useMessaging({ socket, isConnected, token, currentUser, partner, isChatOpen, onNewMessage }) {
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
@@ -11,6 +11,11 @@ export function useMessaging({ socket, isConnected, token, currentUser, partner,
   useEffect(() => {
     isChatOpenRef.current = isChatOpen;
   }, [isChatOpen]);
+
+  const onNewMessageRef = useRef(onNewMessage);
+  useEffect(() => {
+    onNewMessageRef.current = onNewMessage;
+  }, [onNewMessage]);
 
   // Mark all unread messages as read
   const markAsRead = useCallback(async () => {
@@ -103,6 +108,7 @@ export function useMessaging({ socket, isConnected, token, currentUser, partner,
       } else {
         // Chat is closed, increment unread badge counter
         setUnreadCount((count) => count + 1);
+        onNewMessageRef.current?.(newMsg);
       }
     };
 

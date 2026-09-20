@@ -1,0 +1,177 @@
+/* ── Push Notification Banner (WhatsApp / Instagram / Snapchat Style) ── */
+
+.pm-notif-container {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 410px;
+  z-index: 99999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.pm-notif-card {
+  pointer-events: auto;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border-radius: 18px;
+  box-shadow: 0 12px 34px -4px rgba(0, 0, 0, 0.18),
+              0 3px 10px rgba(0, 0, 0, 0.08),
+              0 0 0 1px rgba(0, 0, 0, 0.08);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  animation: pmNotifSlideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+
+.pm-notif-card:active {
+  transform: scale(0.975);
+}
+
+.pm-notif-card.exiting {
+  animation: pmNotifSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pmNotifSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pmNotifSlideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.94);
+  }
+}
+
+/* ── Avatar / Icon ── */
+.pm-notif-avatar-wrap {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+}
+
+.pm-notif-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10B981, #059669);
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+.pm-notif-avatar.music-avatar {
+  background: linear-gradient(135deg, #E8623F, #F43F5E);
+  box-shadow: 0 2px 8px rgba(232, 98, 63, 0.4);
+}
+
+.pm-notif-badge-icon {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #22C55E;
+  border: 2px solid #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 9px;
+}
+
+.pm-notif-badge-icon.music-badge {
+  background: #E8623F;
+}
+
+/* ── Info Column ── */
+.pm-notif-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pm-notif-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pm-notif-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.pm-notif-time {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94A3B8;
+  flex-shrink: 0;
+}
+
+.pm-notif-msg {
+  font-size: 12.5px;
+  color: #475569;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Close Button ── */
+.pm-notif-close {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.pm-notif-close:hover {
+  background: #F1F5F9;
+  color: #334155;
+}

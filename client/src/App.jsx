@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { MusicProvider } from './features/music';
 import Login from './pages/Login';
 import Pair from './pages/Pair';
@@ -27,9 +28,11 @@ function AuthenticatedLayout() {
 
   return (
     <SocketProvider>
-      <MusicProvider>
-        <Outlet />
-      </MusicProvider>
+      <NotificationProvider>
+        <MusicProvider>
+          <Outlet />
+        </MusicProvider>
+      </NotificationProvider>
     </SocketProvider>
   );
 }
