@@ -62,7 +62,7 @@
 /* ── Floating Popover Chat Window (Page behind remains scrollable) ── */
 .pm-popover {
   position: fixed;
-  top: 58px;
+  top: calc(66px + env(safe-area-inset-top, 0px));
   right: 18px;
   width: 360px;
   max-width: calc(100vw - 28px);

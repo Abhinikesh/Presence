@@ -2597,7 +2597,13 @@ function Home() {
         onEnded={handleEnded}
       />
 
-      <nav className="home-nav">
+      <nav
+        className="home-nav"
+        style={isDarkBg ? {
+          backgroundColor: 'rgba(28, 31, 38, 0.94)',
+          borderBottomColor: 'rgba(255, 255, 255, 0.08)'
+        } : undefined}
+      >
         <div className="home-nav-container">
           <div className="nav-logo">
             Presence <span className="nav-logo-dot" />
