@@ -11,9 +11,9 @@ import { MusicPage } from './features/music';
 
 // Persistent layout for authenticated routes to keep socket and audio engine mounted
 function AuthenticatedLayout() {
-  const { token, loading } = useAuth();
+  const { token, user, loading } = useAuth();
 
-  if (loading) {
+  if (loading && !user) {
     return (
       <div className="page-center">
         <h1>Presence</h1>
@@ -39,9 +39,9 @@ function AuthenticatedLayout() {
 
 // logged-in users ko login page pe jaane se rokna
 function PublicRoute({ children }) {
-  const { token, loading } = useAuth();
+  const { token, user, loading } = useAuth();
 
-  if (loading) {
+  if (loading && !user) {
     return (
       <div className="page-center">
         <h1>Presence</h1>
