@@ -32,15 +32,23 @@ function normalizeTitle(name) {
     .replace(/\s+/g, ' ');
 }
 
-// Helper — emit to partner if online
-function emitToPartner(req, event, payload) {
+// Helper — emit to partner and self if online
+function emitToPair(req, event, payload) {
   try {
     const io          = req.app.get('io');
     const onlineUsers = req.app.get('onlineUsers');
-    const partnerId   = req.user.pairId?.toString();
-    if (!io || !onlineUsers || !partnerId) return;
-    const partnerInfo = onlineUsers.get(partnerId);
-    if (partnerInfo) io.to(partnerInfo.socketId).emit(event, payload);
+    if (!io || !onlineUsers) return;
+
+    const partnerId = req.user.pairId?.toString();
+    if (partnerId) {
+      const partnerInfo = onlineUsers.get(partnerId);
+      if (partnerInfo) io.to(partnerInfo.socketId).emit(event, payload);
+    }
+    const selfId = req.user._id?.toString();
+    if (selfId) {
+      const selfInfo = onlineUsers.get(selfId);
+      if (selfInfo) io.to(selfInfo.socketId).emit(event, payload);
+    }
   } catch (_) {}
 }
 
@@ -96,8 +104,8 @@ router.post('/upload', auth, (req, res) => {
       });
       await song.save();
 
-      // ── Notify partner in real-time ────────────────────────────────────
-      emitToPartner(req, 'song_added', song);
+      // ── Notify partner and other active sessions in real-time ──────────
+      emitToPair(req, 'song_added', song);
 
       res.status(201).json({ message: 'Song uploaded successfully!', song });
     } catch (dbErr) {
@@ -110,10 +118,16 @@ router.post('/upload', auth, (req, res) => {
 router.get('/', auth, async (req, res) => {
   try {
     const partnerId = req.user.pairId;
-    if (!partnerId) return res.json([]);
-    const songs = await Song.find({
-      pairId: { $in: [req.user._id, partnerId] }
-    }).sort({ createdAt: -1 });
+    const query = partnerId
+      ? {
+          $or: [
+            { pairId: { $in: [req.user._id, partnerId] } },
+            { uploadedBy: { $in: [req.user._id, partnerId] } }
+          ]
+        }
+      : { uploadedBy: req.user._id };
+
+    const songs = await Song.find(query).sort({ createdAt: -1 });
     res.json(songs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve songs: ' + error.message });
@@ -139,8 +153,8 @@ router.delete('/:id', auth, async (req, res) => {
 
     await song.deleteOne();
 
-    // ── Notify partner in real-time ────────────────────────────────────
-    emitToPartner(req, 'song_deleted', { _id: req.params.id });
+    // ── Notify partner and other active sessions in real-time ──────────
+    emitToPair(req, 'song_deleted', { _id: req.params.id });
 
     res.json({ message: 'Song deleted.', _id: req.params.id });
   } catch (err) {

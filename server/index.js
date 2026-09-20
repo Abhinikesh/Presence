@@ -858,8 +858,7 @@ io.on('connection', async (socket) => {
             currentTime: currentPos,
             isPlaying: state.isPlaying,
             isShuffle: state.isShuffle,
-            repeatMode: state.repeatMode,
-            tracks: state.tracks
+            repeatMode: state.repeatMode
           });
         }
       }

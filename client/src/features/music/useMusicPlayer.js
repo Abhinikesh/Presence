@@ -333,8 +333,11 @@ export function useMusicPlayer(initialTracks = []) {
   const setQueue = useCallback((newTracks) => {
     setTracks(newTracks);
     const current = currentTrackRef.current;
-    // If no current track, or current track has no playable fileUrl while incoming queue has one, adopt the first playable track
-    if ((!current || !current.fileUrl) && newTracks.length > 0 && newTracks[0]?.fileUrl) {
+    const isSample = !current || !current._id || String(current._id).startsWith('sample-');
+    const hasRealTrack = Array.isArray(newTracks) && newTracks.some((t) => t && t._id && !String(t._id).startsWith('sample-'));
+
+    // If no current track, or current track is a sample track while incoming queue has real uploaded songs, adopt the first playable track
+    if ((!current || !current.fileUrl || (isSample && hasRealTrack)) && newTracks.length > 0 && newTracks[0]?.fileUrl) {
       setCurrentTrack(newTracks[0]);
       currentTrackRef.current = newTracks[0];
     }

@@ -98,15 +98,12 @@ export function MusicProvider({ children }) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           setQueue(data);
-        } else {
+        } else if (!tracksRef.current || tracksRef.current.length === 0) {
           setQueue(DEFAULT_SAMPLE_TRACKS);
         }
-      } else {
-        setQueue(DEFAULT_SAMPLE_TRACKS);
       }
     } catch (err) {
       console.error('[MusicContext] Error fetching songs:', err);
-      setQueue(DEFAULT_SAMPLE_TRACKS);
     }
   }, [token, setQueue]);
 
@@ -206,14 +203,13 @@ export function MusicProvider({ children }) {
     };
 
     const handleRequestSync = () => {
-      // Respond with active playback snapshot
+      // Respond with active playback snapshot without overriding song catalog
       socket.emit('music:sync_state', {
         track: currentTrackRef.current,
         currentTime: currentTimeRef.current,
         isPlaying: isPlayingRef.current,
         isShuffle: isShuffleRef.current,
-        repeatMode: repeatModeRef.current,
-        tracks: tracksRef.current
+        repeatMode: repeatModeRef.current
       });
     };
 
@@ -223,7 +219,12 @@ export function MusicProvider({ children }) {
       lastIncomingSyncTimeRef.current = Date.now();
 
       if (Array.isArray(data.tracks) && data.tracks.length > 0) {
-        setQueue(data.tracks);
+        const incomingHasReal = data.tracks.some((t) => t && t._id && !String(t._id).startsWith('sample-'));
+        const localHasReal = tracksRef.current && tracksRef.current.some((t) => t && t._id && !String(t._id).startsWith('sample-'));
+        // Only adopt incoming queue if it has real tracks or local has no real tracks
+        if (incomingHasReal || !localHasReal) {
+          setQueue(data.tracks);
+        }
       }
       if (data.track) {
         if (!currentTrackRef.current || currentTrackRef.current._id !== data.track._id) {
@@ -246,6 +247,14 @@ export function MusicProvider({ children }) {
       }
     };
 
+    const handleSongAdded = () => {
+      fetchSongs();
+    };
+
+    const handleSongDeleted = () => {
+      fetchSongs();
+    };
+
     socket.on('partner_status', handlePartnerStatus);
     socket.on('partner_online', handlePartnerOnline);
     socket.on('partner_offline', handlePartnerOffline);
@@ -256,6 +265,8 @@ export function MusicProvider({ children }) {
     socket.on('music:sync_queue_update', handleSyncQueueUpdate);
     socket.on('music:request_sync', handleRequestSync);
     socket.on('music:sync_state', handleSyncState);
+    socket.on('song_added', handleSongAdded);
+    socket.on('song_deleted', handleSongDeleted);
 
     return () => {
       socket.off('partner_status', handlePartnerStatus);
@@ -268,8 +279,10 @@ export function MusicProvider({ children }) {
       socket.off('music:sync_queue_update', handleSyncQueueUpdate);
       socket.off('music:request_sync', handleRequestSync);
       socket.off('music:sync_state', handleSyncState);
+      socket.off('song_added', handleSongAdded);
+      socket.off('song_deleted', handleSongDeleted);
     };
-  }, [socket, playerPlayTrack, playerTogglePlayPause, playerSeek, setQueue]);
+  }, [socket, playerPlayTrack, playerTogglePlayPause, playerSeek, setQueue, fetchSongs]);
 
   // ── Wrapped Control Handlers that Broadcast to Partner ──
   const togglePlayPause = useCallback(() => {
@@ -353,13 +366,27 @@ export function MusicProvider({ children }) {
     }, 50);
   }, [playerMoveDown, socket]);
 
-  const removeTrack = useCallback((track) => {
+  const removeTrack = useCallback(async (track) => {
+    if (!track) return;
     playerRemoveTrack(track);
+
+    // If it's a real database song, delete it from backend so it doesn't reappear on reload
+    if (track._id && !String(track._id).startsWith('sample-') && token) {
+      try {
+        await fetch(`${BACKEND_URL}/api/songs/${track._id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (err) {
+        console.error('[MusicContext] Failed to delete song from backend:', err);
+      }
+    }
+
     if (!socket) return;
     setTimeout(() => {
       socket.emit('music:queue_update', { tracks: tracksRef.current });
     }, 50);
-  }, [playerRemoveTrack, socket]);
+  }, [playerRemoveTrack, socket, token]);
 
   return (
     <MusicContext.Provider
