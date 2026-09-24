@@ -9,7 +9,6 @@ import { useMusic, MiniPlayerBar } from '../features/music';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { ChatIcon, ChatBox, useMessaging } from '../messaging';
 
-// ── Background colour palette (medium tones) ────────────────────
 const BG_PALETTE = [
   { label: 'Warm White',   value: '#FAF9F7' },
   { label: 'Sky Blue',     value: '#BAE6FD' },
