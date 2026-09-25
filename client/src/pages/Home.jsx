@@ -35,7 +35,6 @@ const CARD_PALETTE = [
   { label: 'Coral',         value: '#FDBA74' },
 ];
 
-// ── Inline Settings gear icon (no emoji) ──────────────────────
 function GearIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
