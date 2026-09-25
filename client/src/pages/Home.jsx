@@ -22,7 +22,6 @@ const BG_PALETTE = [
   { label: 'Midnight',     value: '#1C1F26' },
 ];
 
-// ── Card colour palette (medium tones — readable text) ──────────
 const CARD_PALETTE = [
   { label: 'White',         value: '#FFFFFF' },
   { label: 'Sky Blue',      value: '#BAE6FD' },
