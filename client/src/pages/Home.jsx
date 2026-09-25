@@ -77,7 +77,6 @@ function Home() {
     }
   }, [location.search]);
 
-  // ── Settings state — persisted in localStorage + DB ──
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [displayName, setDisplayName] = useState(
     () => localStorage.getItem('presence_displayName') || ''
