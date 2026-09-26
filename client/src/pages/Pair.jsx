@@ -11,7 +11,6 @@ function Pair() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // user already paired hai to direct home page pr bhejenge
     if (user && user.pairId) {
       navigate('/home');
     }
