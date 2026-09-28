@@ -26,7 +26,6 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ error: 'User not found.' });
     }
 
-    // req me user aur token attach kr rhe hai
     req.user = user;
     req.token = token;
     next();
