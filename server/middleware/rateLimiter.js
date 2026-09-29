@@ -1,6 +1,5 @@
 /**
  * Lightweight in-memory rate limiter middleware (zero external dependencies)
- * Tracks request counts per client IP or custom key within a rolling window.
  */
 
 function createRateLimiter({
