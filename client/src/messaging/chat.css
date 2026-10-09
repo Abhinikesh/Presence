@@ -217,7 +217,6 @@
   letter-spacing: 0.2px;
 }
 
-/* ── Messages ── */
 .pm-msg {
   display: flex;
   flex-direction: column;
